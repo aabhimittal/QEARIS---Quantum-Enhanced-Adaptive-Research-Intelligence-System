@@ -1,0 +1,76 @@
+qearis/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml
+│       ├── deploy.yml
+│       └── test.yml
+├── src/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── quantum_optimizer.py
+│   │   ├── rag_system.py
+│   │   ├── memory_bank.py
+│   │   ├── mcp_server.py
+│   │   └── context_manager.py
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   ├── base_agent.py
+│   │   ├── research_agent.py
+│   │   ├── validation_agent.py
+│   │   └── synthesis_agent.py
+│   ├── orchestrator/
+│   │   ├── __init__.py
+│   │   ├── multi_agent_orchestrator.py
+│   │   └── task_models.py
+│   ├── observability/
+│   │   ├── __init__.py
+│   │   ├── metrics.py
+│   │   └── logging_config.py
+│   ├── evaluation/
+│   │   ├── __init__.py
+│   │   └── agent_evaluator.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── routes.py
+│   │   └── schemas.py
+│   └── deployment/
+│       ├── __init__.py
+│       └── cloud_run.py
+├── tests/
+│   ├── __init__.py
+│   ├── test_quantum_optimizer.py
+│   ├── test_agents.py
+│   └── test_orchestrator.py
+├── deployment/
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── kubernetes/
+│   │   ├── deployment.yaml
+│   │   └── service.yaml
+│   └── cloud-run/
+│       └── service.yaml
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── API.md
+│   ├── DEPLOYMENT.md
+│   └── images/
+│       ├── architecture.png
+│       └── workflow.png
+├── notebooks/
+│   └── qearis_demo.ipynb
+├── scripts/
+│   ├── setup.sh
+│   ├── deploy_cloud_run.sh
+│   └── test_local.sh
+├── .env.example
+├── .gitignore
+├── .dockerignore
+├── requirements.txt
+├── requirements-dev.txt
+├── setup.py
+├── pyproject.toml
+├── README.md
+└── LICENSE
