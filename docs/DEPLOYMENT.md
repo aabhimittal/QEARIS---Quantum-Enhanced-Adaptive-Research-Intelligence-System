@@ -148,4 +148,9 @@ gcloud run deploy qearis \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars="GEMINI_API_KEY=${
+  --set-env-vars="GEMINI_API_KEY=${GEMINI_API_KEY}" 
+  --memory 2Gi 
+  --cpu 2
+  --timeout 300 
+  --max-instances 10 
+  --min-instances 1
