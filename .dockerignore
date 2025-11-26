@@ -1,0 +1,59 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# Virtual Environment
+venv
+ENV
+env
+.venv
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Development
+.vscode
+.idea
+*.swp
+
+# Data
+data/
+sessions/
+logs/
+tmp/
+
+# Environment
+.env
+.env.*
+
+# Notebooks
+notebooks/
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
