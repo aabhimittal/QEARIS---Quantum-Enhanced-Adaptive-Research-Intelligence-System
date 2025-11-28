@@ -1,0 +1,669 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Release Management Workflow
+# Triggers: Tag creation, Manual dispatch
+# Purpose: Automated release creation, changelog generation, asset building
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Semantic versioning tags (e.g., v1.0.0, v2.1.3)
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: 'Create as draft'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 1: Validate Release
+  # ═══════════════════════════════════════════════════════════════════════
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version-number: ${{ steps.version.outputs.version-number }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for changelog
+      
+      - name: 🏷️ Extract Version Information
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          
+          # Remove 'v' prefix for version number
+          VERSION_NUMBER=${VERSION#v}
+          
+          # Check if prerelease (contains alpha, beta, rc)
+          if [[ "$VERSION" =~ (alpha|beta|rc) ]]; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE="${{ github.event.inputs.prerelease || 'false' }}"
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version-number=$VERSION_NUMBER" >> $GITHUB_OUTPUT
+          echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          
+          echo "📦 Version: $VERSION"
+          echo "🔢 Version Number: $VERSION_NUMBER"
+          echo "🎯 Pre-release: $IS_PRERELEASE"
+      
+      - name: ✅ Validate Semantic Version
+        run: |
+          VERSION="${{ steps.version.outputs.version-number }}"
+          
+          # Validate semantic versioning format
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Expected format: X.Y.Z or X.Y.Z-prerelease"
+            exit 1
+          fi
+          
+          echo "✅ Version format valid"
+      
+      - name: 📝 Generate Changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG="${{ steps.version.outputs.version }}"
+          
+          echo "Generating changelog from $PREVIOUS_TAG to $CURRENT_TAG"
+          
+          # Generate changelog
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # First release - use all commits
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            # Generate diff from previous tag
+            CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          # Save to file
+          echo "$CHANGELOG" > changelog.txt
+          
+          # Set output (escaped for multiline)
+          {
+            echo 'changelog<<EOF'
+            echo "$CHANGELOG"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+          
+          echo "✅ Changelog generated"
+      
+      - name: 📤 Upload Changelog
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: changelog.txt
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 2: Run Tests
+  # ═══════════════════════════════════════════════════════════════════════
+  test:
+    name: Pre-Release Tests
+    runs-on: ubuntu-latest
+    needs: validate
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: 📦 Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      - name: 🧪 Run Full Test Suite
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          pytest tests/ \
+            -v \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term \
+            --junit-xml=test-results.xml
+          
+          echo "✅ All tests passed"
+      
+      - name: 📤 Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            test-results.xml
+            coverage.xml
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 3: Build Release Assets
+  # ═══════════════════════════════════════════════════════════════════════
+  build-assets:
+    name: Build Release Assets
+    runs-on: ${{ matrix.os }}
+    needs: [validate, test]
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 📦 Install Build Tools
+        run: |
+          pip install --upgrade pip setuptools wheel build
+          pip install -r requirements.txt
+      
+      - name: 🔨 Build Distribution
+        run: |
+          python -m build
+          echo "✅ Distribution built"
+      
+      - name: 📝 Create Source Archive
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          tar -czf qearis-${VERSION}-source.tar.gz \
+            --exclude='.git' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.pytest_cache' \
+            --exclude='venv' \
+            --exclude='*.egg-info' \
+            .
+          
+          echo "✅ Source archive created"
+      
+      - name: 📊 Generate Documentation
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # Install documentation tools
+          pip install mkdocs mkdocs-material
+          
+          # Build docs if mkdocs.yml exists
+          if [ -f "mkdocs.yml" ]; then
+            mkdocs build
+            tar -czf documentation.tar.gz site/
+            echo "✅ Documentation built"
+          else
+            # Create simple documentation archive
+            tar -czf documentation.tar.gz docs/ README.md
+            echo "✅ Documentation archive created"
+          fi
+      
+      - name: 📤 Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: |
+            dist/*
+            qearis-*-source.tar.gz
+            documentation.tar.gz
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 4: Build Docker Image
+  # ═══════════════════════════════════════════════════════════════════════
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [validate, test]
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: 🔨 Build Docker Image
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg VERSION=$VERSION \
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            --build-arg VCS_REF=${{ github.sha }} \
+            -t qearis:$VERSION \
+            -t qearis:latest \
+            --output type=docker,dest=/tmp/qearis-$VERSION.tar \
+            .
+          
+          # Compress
+          gzip /tmp/qearis-$VERSION.tar
+          
+          echo "✅ Docker image built"
+      
+      - name: 📤 Upload Docker Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/qearis-*.tar.gz
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 5: Generate Release Notes
+  # ═══════════════════════════════════════════════════════════════════════
+  release-notes:
+    name: Generate Release Notes
+    runs-on: ubuntu-latest
+    needs: validate
+    
+    outputs:
+      release-body: ${{ steps.notes.outputs.release-body }}
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 📥 Download Changelog
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog
+      
+      - name: 📝 Generate Release Notes
+        id: notes
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          IS_PRERELEASE="${{ needs.validate.outputs.is-prerelease }}"
+          
+          # Read changelog
+          CHANGELOG=$(cat changelog.txt)
+          
+          # Count changes by type
+          FEATURES=$(echo "$CHANGELOG" | grep -i "feat:" | wc -l)
+          FIXES=$(echo "$CHANGELOG" | grep -i "fix:" | wc -l)
+          DOCS=$(echo "$CHANGELOG" | grep -i "docs:" | wc -l)
+          
+          # Create release notes
+          cat > release-notes.md << 'EOF'
+          # QEARIS Release $VERSION
+          
+          EOF
+          
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            echo "⚠️ **This is a pre-release version**" >> release-notes.md
+            echo "" >> release-notes.md
+          fi
+          
+          cat >> release-notes.md << EOF
+          ## 📊 Release Statistics
+          
+          - **Features:** $FEATURES
+          - **Bug Fixes:** $FIXES
+          - **Documentation:** $DOCS
+          - **Total Changes:** $(echo "$CHANGELOG" | wc -l)
+          
+          ## 🎯 Highlights
+          
+          <!-- Add manual highlights here -->
+          
+          ## 📋 Changes
+          
+          EOF
+          
+          # Categorize changes
+          echo "### ✨ Features" >> release-notes.md
+          echo "$CHANGELOG" | grep -i "feat:" || echo "No new features" >> release-notes.md
+          echo "" >> release-notes.md
+          
+          echo "### 🐛 Bug Fixes" >> release-notes.md
+          echo "$CHANGELOG" | grep -i "fix:" || echo "No bug fixes" >> release-notes.md
+          echo "" >> release-notes.md
+          
+          echo "### 📚 Documentation" >> release-notes.md
+          echo "$CHANGELOG" | grep -i "docs:" || echo "No documentation changes" >> release-notes.md
+          echo "" >> release-notes.md
+          
+          echo "### 🔧 Other Changes" >> release-notes.md
+          echo "$CHANGELOG" | grep -v -i "feat:\|fix:\|docs:" || echo "No other changes" >> release-notes.md
+          echo "" >> release-notes.md
+          
+          cat >> release-notes.md << 'EOF'
+          
+          ## 🚀 Deployment
+          
+          ### Docker
+```bash
+          docker pull gcr.io/gen-lang-client-0472751146/qearis:$VERSION
+          docker run -p 8080:8080 -e GEMINI_API_KEY=your_key gcr.io/gen-lang-client-0472751146/qearis:$VERSION
+```
+          
+          ### Cloud Run
+```bash
+          gcloud run deploy qearis \
+            --image gcr.io/gen-lang-client-0472751146/qearis:$VERSION \
+            --region us-central1
+```
+          
+          ### pip
+```bash
+          pip install qearis==$VERSION_NUMBER
+```
+          
+          ## 📦 Assets
+          
+          - **Source Code:** Download the source code archive
+          - **Docker Image:** Available in the artifacts
+          - **Documentation:** Complete documentation package
+          - **Distributions:** Python wheels and source distributions
+          
+          ## 🔗 Links
+          
+          - **Documentation:** https://github.com/aabhimittal/QEARIS/docs
+          - **Issues:** https://github.com/aabhimittal/QEARIS/issues
+          - **Discussions:** https://github.com/aabhimittal/QEARIS/discussions
+          
+          ## 💬 Feedback
+          
+          Found a bug or have a suggestion? Please open an issue!
+          
+          ---
+          
+          **Full Changelog:** https://github.com/aabhimittal/QEARIS/compare/PREVIOUS_TAG...$VERSION
+          EOF
+          
+          # Replace variables
+          sed -i "s/\$VERSION/$VERSION/g" release-notes.md
+          sed -i "s/\$VERSION_NUMBER/${{ needs.validate.outputs.version-number }}/g" release-notes.md
+          
+          # Set output
+          {
+            echo 'release-body<<EOF'
+            cat release-notes.md
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+          
+          echo "✅ Release notes generated"
+      
+      - name: 📤 Upload Release Notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 6: Create GitHub Release
+  # ═══════════════════════════════════════════════════════════════════════
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate, test, build-assets, build-docker, release-notes]
+    
+    permissions:
+      contents: write
+      discussions: write
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 📥 Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+      
+      - name: 📦 Organize Release Assets
+        run: |
+          mkdir -p release-assets
+          
+          # Copy distributions
+          find artifacts/dist-* -type f -exec cp {} release-assets/ \;
+          
+          # Copy Docker image
+          cp artifacts/docker-image/*.tar.gz release-assets/
+          
+          # Copy documentation
+          if [ -f artifacts/dist-ubuntu-latest/documentation.tar.gz ]; then
+            cp artifacts/dist-ubuntu-latest/documentation.tar.gz release-assets/
+          fi
+          
+          # Copy source archive
+          if [ -f artifacts/dist-ubuntu-latest/qearis-*-source.tar.gz ]; then
+            cp artifacts/dist-ubuntu-latest/qearis-*-source.tar.gz release-assets/
+          fi
+          
+          # Generate checksums
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cd ..
+          
+          echo "✅ Release assets organized"
+      
+      - name: 📝 Load Release Notes
+        id: notes
+        run: |
+          NOTES=$(cat artifacts/release-notes/release-notes.md)
+          {
+            echo 'notes<<EOF'
+            echo "$NOTES"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+      
+      - name: 🚀 Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.validate.outputs.version }}
+          name: Release ${{ needs.validate.outputs.version }}
+          body: ${{ steps.notes.outputs.notes }}
+          draft: ${{ github.event.inputs.draft || 'false' }}
+          prerelease: ${{ needs.validate.outputs.is-prerelease }}
+          files: |
+            release-assets/*
+          discussion_category_name: Releases
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 📊 Release Summary
+        run: |
+          echo "# 🎉 Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Release Information" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ needs.validate.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Pre-release | ${{ needs.validate.outputs.is-prerelease }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Draft | ${{ github.event.inputs.draft || 'false' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Assets" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          ls -lh release-assets/ >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. ✅ Release created on GitHub" >> $GITHUB_STEP_SUMMARY
+          echo "2. 📢 Announce in discussions" >> $GITHUB_STEP_SUMMARY
+          echo "3. 📝 Update documentation" >> $GITHUB_STEP_SUMMARY
+          echo "4. 🚀 Deploy to production" >> $GITHUB_STEP_SUMMARY
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 7: Publish to PyPI (Optional)
+  # ═══════════════════════════════════════════════════════════════════════
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [validate, create-release]
+    if: needs.validate.outputs.is-prerelease == 'false'
+    
+    environment:
+      name: pypi
+      url: https://pypi.org/project/qearis
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 📦 Install Build Tools
+        run: |
+          pip install --upgrade pip build twine
+      
+      - name: 🔨 Build Package
+        run: |
+          python -m build
+          echo "✅ Package built"
+      
+      - name: ✅ Check Package
+        run: |
+          twine check dist/*
+          echo "✅ Package validated"
+      
+      - name: 📤 Publish to PyPI
+        continue-on-error: true
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          twine upload dist/*
+          echo "✅ Published to PyPI"
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 8: Update Documentation
+  # ═══════════════════════════════════════════════════════════════════════
+  update-docs:
+    name: Update Documentation
+    runs-on: ubuntu-latest
+    needs: [validate, create-release]
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      
+      - name: 📝 Update Version in Files
+        run: |
+          VERSION="${{ needs.validate.outputs.version-number }}"
+          
+          # Update version in setup.py if exists
+          if [ -f "setup.py" ]; then
+            sed -i "s/version='.*'/version='$VERSION'/g" setup.py
+          fi
+          
+          # Update version in pyproject.toml if exists
+          if [ -f "pyproject.toml" ]; then
+            sed -i "s/version = \".*\"/version = \"$VERSION\"/g" pyproject.toml
+          fi
+          
+          # Update version in __init__.py
+          if [ -f "src/__init__.py" ]; then
+            sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/g" src/__init__.py
+          fi
+          
+          echo "✅ Version updated in files"
+      
+      - name: 📝 Update Changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          DATE=$(date +%Y-%m-%d)
+          
+          # Create or update CHANGELOG.md
+          if [ ! -f "CHANGELOG.md" ]; then
+            echo "# Changelog" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          # Add new version entry
+          sed -i "3i## [$VERSION] - $DATE\n\n${{ needs.validate.outputs.changelog }}\n" CHANGELOG.md
+          
+          echo "✅ Changelog updated"
+      
+      - name: 💾 Commit Changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add setup.py pyproject.toml src/__init__.py CHANGELOG.md || true
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: bump version to ${{ needs.validate.outputs.version }}"
+            git push
+            echo "✅ Version bump committed"
+          fi
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 9: Notify Release
+  # ═══════════════════════════════════════════════════════════════════════
+  notify:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: [validate, create-release]
+    if: always()
+    
+    steps:
+      - name: 📊 Create Release Summary
+        run: |
+          echo "# 🎉 Release Workflow Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Release Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ needs.validate.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pre-release:** ${{ needs.validate.outputs.is-prerelease }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ needs.create-release.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Links" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.version }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Documentation](https://github.com/${{ github.repository }}/docs)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.create-release.result }}" == "success" ]; then
+            echo "✅ **Release created successfully!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Release creation failed. Check logs for details.**" >> $GITHUB_STEP_SUMMARY
+          fi
