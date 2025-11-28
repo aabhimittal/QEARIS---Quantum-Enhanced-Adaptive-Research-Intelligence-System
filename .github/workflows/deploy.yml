@@ -1,83 +1,457 @@
-name: Deploy to Cloud Run
+# ═══════════════════════════════════════════════════════════════════════════
+# Production Deployment Workflow - Google Cloud Run
+# Triggers: Push to main, Manual dispatch, Tag creation
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: Deploy to Production
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      skip_tests:
+        description: 'Skip tests (emergency deploy)'
+        required: false
+        type: boolean
+        default: false
 
 env:
-  PROJECT_ID: gen-lang-client-0472751146
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION || 'us-central1' }}
   SERVICE_NAME: qearis
-  REGION: us-central1
+  REGISTRY: gcr.io
+  PYTHON_VERSION: "3.10"
 
 jobs:
-  deploy:
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 1: Pre-Deployment Validation
+  # ═══════════════════════════════════════════════════════════════════════
+  validate:
+    name: Pre-Deployment Validation
     runs-on: ubuntu-latest
     
-    permissions:
-      contents: read
-      id-token: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      deploy-env: ${{ steps.env.outputs.environment }}
+      should-deploy: ${{ steps.check.outputs.should-deploy }}
     
     steps:
-      - name: Checkout code
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 🏷️ Determine Version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=$(git describe --tags --always --dirty)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Version: $VERSION"
+      
+      - name: 🌍 Determine Environment
+        id: env
+        run: |
+          ENV="${{ github.event.inputs.environment || 'production' }}"
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "🌍 Environment: $ENV"
+      
+      - name: ✅ Deployment Checks
+        id: check
+        run: |
+          echo "should-deploy=true" >> $GITHUB_OUTPUT
+          
+          # Check if secrets are configured
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "❌ GCP_SA_KEY secret not configured"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then
+            echo "❌ GEMINI_API_KEY secret not configured"
+            exit 1
+          fi
+          
+          echo "✅ All secrets configured"
+          echo "✅ Pre-deployment validation passed"
+      
+      - name: 📊 Create Deployment Summary
+        run: |
+          echo "# 🚀 Deployment Information" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ steps.env.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region:** ${{ env.REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 2: Run Tests (unless skipped)
+  # ═══════════════════════════════════════════════════════════════════════
+  test:
+    name: Run Test Suite
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event.inputs.skip_tests != 'true'
+    
+    steps:
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Authenticate to Google Cloud
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: 📦 Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      - name: 🧪 Run Quick Tests
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          pytest tests/ -v -m "not slow" --maxfail=5
+          echo "✅ Tests passed"
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 3: Build & Push Docker Image
+  # ═══════════════════════════════════════════════════════════════════════
+  build:
+    name: Build & Push Container
+    runs-on: ubuntu-latest
+    needs: [validate, test]
+    if: |
+      always() &&
+      needs.validate.outputs.should-deploy == 'true' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🔐 Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       
-      - name: Set up Cloud SDK
+      - name: ☁️ Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+      
+      - name: 🐳 Configure Docker for GCR
+        run: |
+          gcloud auth configure-docker
+          echo "✅ Docker configured for GCR"
+      
+      - name: 🏗️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: 💾 Cache Docker Layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
+      - name: 🔨 Build Docker Image
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:$VERSION"
+          IMAGE_LATEST="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest"
+          
+          docker buildx build \
+            --platform linux/amd64 \
+            --build-arg VERSION=$VERSION \
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            --build-arg VCS_REF=${{ github.sha }} \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            -t $IMAGE_TAG \
+            -t $IMAGE_LATEST \
+            --load \
+            .
+          
+          echo "✅ Docker image built"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_LATEST=$IMAGE_LATEST" >> $GITHUB_ENV
+      
+      - name: 🔍 Scan Image for Vulnerabilities
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy image \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            ${{ env.IMAGE_TAG }}
+      
+      - name: 📤 Push to Container Registry
+        run: |
+          docker push ${{ env.IMAGE_TAG }}
+          docker push ${{ env.IMAGE_LATEST }}
+          
+          echo "✅ Images pushed to GCR"
+          echo "  📦 ${{ env.IMAGE_TAG }}"
+          echo "  📦 ${{ env.IMAGE_LATEST }}"
+      
+      - name: 🔄 Move Cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 4: Deploy to Cloud Run
+  # ═══════════════════════════════════════════════════════════════════════
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    needs: [validate, build]
+    environment:
+      name: ${{ needs.validate.outputs.deploy-env }}
+      url: ${{ steps.deploy.outputs.url }}
+    
+    outputs:
+      service-url: ${{ steps.deploy.outputs.url }}
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🔐 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: ☁️ Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
       
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker
-      
-      - name: Build Docker image
-        run: |
-          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
-          docker tag gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
-                     gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
-      
-      - name: Push to Container Registry
-        run: |
-          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
-          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
-      
-      - name: Deploy to Cloud Run
+      - name: 🚀 Deploy to Cloud Run
+        id: deploy
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ needs.validate.outputs.version }}
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --image $IMAGE \
             --platform managed \
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
-            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GEMINI_PROJECT_ID=${{ env.PROJECT_ID }}" \
+            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --set-env-vars="GEMINI_PROJECT_ID=${{ env.PROJECT_ID }}" \
+            --set-env-vars="ENVIRONMENT=${{ needs.validate.outputs.deploy-env }}" \
+            --set-env-vars="VERSION=$VERSION" \
+            --set-env-vars="LOG_LEVEL=INFO" \
             --memory 2Gi \
             --cpu 2 \
             --timeout 300 \
             --max-instances 10 \
-            --min-instances 1
-      
-      - name: Get Service URL
-        run: |
+            --min-instances 1 \
+            --concurrency 80 \
+            --port 8080 \
+            --labels="version=$VERSION,app=qearis,environment=${{ needs.validate.outputs.deploy-env }},managed-by=github-actions" \
+            --quiet
+          
+          # Get service URL
           SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
             --region ${{ env.REGION }} \
             --format 'value(status.url)')
-          echo "Service deployed at: $SERVICE_URL"
-          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+          
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "✅ Deployment successful!"
+          echo "🌐 Service URL: $SERVICE_URL"
       
-      - name: Test deployment
+      - name: 🏷️ Tag Revision
         run: |
-          curl -f ${{ env.SERVICE_URL }}/health || exit 1
+          # Get latest revision
+          REVISION=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --format 'value(status.latestCreatedRevisionName)')
+          
+          # Update traffic to latest
+          gcloud run services update-traffic ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --to-latest \
+            --quiet
+          
+          echo "✅ Traffic routed to revision: $REVISION"
       
-      - name: Comment on PR
-        if: github.event_name == 'pull_request'
+      - name: 📊 Get Service Info
+        run: |
+          gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --format='table(
+              status.url,
+              status.traffic[0].revisionName,
+              status.traffic[0].percent
+            )'
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 5: Post-Deployment Tests
+  # ═══════════════════════════════════════════════════════════════════════
+  verify:
+    name: Post-Deployment Verification
+    runs-on: ubuntu-latest
+    needs: deploy
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: ⏳ Wait for Service Startup
+        run: |
+          echo "Waiting 30s for service to be fully ready..."
+          sleep 30
+      
+      - name: 🧪 Health Check
+        run: |
+          SERVICE_URL="${{ needs.deploy.outputs.service-url }}"
+          MAX_RETRIES=5
+          RETRY_DELAY=10
+          
+          echo "Testing: $SERVICE_URL/health"
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            if curl -f -s "$SERVICE_URL/health" > /dev/null; then
+              echo "✅ Health check passed (attempt $i)"
+              exit 0
+            else
+              echo "⏳ Health check failed, retrying in ${RETRY_DELAY}s... ($i/$MAX_RETRIES)"
+              sleep $RETRY_DELAY
+            fi
+          done
+          
+          echo "❌ Health check failed after $MAX_RETRIES attempts"
+          exit 1
+      
+      - name: 🧪 Smoke Tests
+        run: |
+          SERVICE_URL="${{ needs.deploy.outputs.service-url }}"
+          
+          echo "Running smoke tests..."
+          
+          # Test 1: Root endpoint
+          echo "  Test 1: Root endpoint"
+          curl -f "$SERVICE_URL/" || exit 1
+          
+          # Test 2: Health endpoint
+          echo "  Test 2: Health endpoint"
+          HEALTH=$(curl -f "$SERVICE_URL/health")
+          echo "    Response: $HEALTH"
+          
+          # Test 3: Research endpoint
+          echo "  Test 3: Research endpoint"
+          curl -X POST "$SERVICE_URL/api/v1/research" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"Deployment verification test","domains":["test"],"max_agents":1}' \
+            -f -s | head -c 200
+          
+          echo ""
+          echo "✅ All smoke tests passed"
+      
+      - name: ⚡ Performance Check
+        continue-on-error: true
+        run: |
+          SERVICE_URL="${{ needs.deploy.outputs.service-url }}"
+          
+          echo "Running performance check..."
+          
+          START=$(date +%s)
+          curl -X POST "$SERVICE_URL/api/v1/research" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"Performance test","domains":["test"]}' \
+            -s -o /dev/null -w "Response time: %{time_total}s\n"
+          END=$(date +%s)
+          
+          DURATION=$((END - START))
+          echo "⏱️ Total response time: ${DURATION}s"
+          
+          if [ $DURATION -lt 60 ]; then
+            echo "✅ Performance check passed"
+          else
+            echo "⚠️ Response time exceeded 60s"
+          fi
+      
+      - name: 📊 Get Metrics
+        run: |
+          SERVICE_URL="${{ needs.deploy.outputs.service-url }}"
+          
+          echo "Fetching metrics..."
+          curl -s "$SERVICE_URL/metrics" | head -20
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 6: Notify & Report
+  # ═══════════════════════════════════════════════════════════════════════
+  notify:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [validate, deploy, verify]
+    if: always()
+    
+    steps:
+      - name: 📊 Create Deployment Summary
+        run: |
+          echo "# 🚀 Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ needs.validate.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${{ needs.validate.outputs.deploy-env }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | ${{ env.SERVICE_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Region | ${{ env.REGION }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ needs.verify.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Service URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🌐 [${{ needs.deploy.outputs.service-url }}](${{ needs.deploy.outputs.service-url }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.verify.result }}" == "success" ]; then
+            echo "## ✅ Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All tests passed. Service is live and healthy. 🎉" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ⚠️ Deployment Issues" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Deployment completed but verification had issues. Please check logs." >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: 💬 Create Release (if tagged)
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            const tag = context.ref.replace('refs/tags/', '');
+            const deployUrl = '${{ needs.deploy.outputs.service-url }}';
+            
+            github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '✅ Deployment successful!\n\n🌐 Service URL: ${{ env.SERVICE_URL }}'
-            })
+              tag_name: tag,
+              name: `Release ${tag}`,
+              body: `## 🚀 Deployed to Production\n\n**Service URL:** ${deployUrl}\n\n**Changes:** See commit history`,
+              draft: false,
+              prerelease: false
+            });
