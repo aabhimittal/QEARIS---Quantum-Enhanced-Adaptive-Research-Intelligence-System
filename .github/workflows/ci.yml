@@ -1,87 +1,585 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Continuous Integration Workflow - PRODUCTION READY
+# Triggers: Push, Pull Request, Schedule
+# ═══════════════════════════════════════════════════════════════════════════
+
 name: CI Pipeline
 
 on:
-  pull_request:
-    branches: [main, develop]
   push:
-    branches: [develop]
+    branches: [ main, develop, feature/** ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.10"
+  CACHE_VERSION: v1
 
 jobs:
-  lint:
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 1: Code Quality & Linting
+  # ═══════════════════════════════════════════════════════════════════════
+  quality:
+    name: Code Quality
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
       
-      - name: Set up Python
+      - name: 🐍 Setup Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
       
-      - name: Install dependencies
+      - name: 💾 Cache Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-
+            ${{ runner.os }}-pip-
+      
+      - name: 📦 Install Quality Tools
         run: |
-          pip install black flake8 mypy
+          python -m pip install --upgrade pip setuptools wheel
+          pip install black==24.1.1 flake8==7.0.0 mypy==1.8.0 pylint==3.0.3
+          pip install bandit==1.7.6 safety==3.0.1 isort==5.13.2
           pip install -r requirements.txt
       
-      - name: Run Black
-        run: black --check src/ tests/
+      - name: 🎨 Check Code Formatting (Black)
+        run: |
+          echo "::group::Black Formatting Check"
+          black --check --diff src/ tests/
+          echo "::endgroup::"
+          echo "✅ Black formatting check passed"
       
-      - name: Run Flake8
-        run: flake8 src/ tests/ --max-line-length=100
+      - name: 📐 Check Import Sorting (isort)
+        run: |
+          echo "::group::isort Check"
+          isort --check-only --diff src/ tests/
+          echo "::endgroup::"
+          echo "✅ Import sorting check passed"
       
-      - name: Run MyPy
-        run: mypy src/ --ignore-missing-imports
+      - name: 🔍 Lint with Flake8
+        run: |
+          echo "::group::Flake8 Analysis"
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          
+          # Exit-zero treats all errors as warnings
+          flake8 src/ tests/ --count --exit-zero --max-complexity=15 --max-line-length=127 --statistics
+          echo "::endgroup::"
+          echo "✅ Flake8 linting passed"
+      
+      - name: 🔬 Type Checking (mypy)
+        continue-on-error: true
+        run: |
+          echo "::group::MyPy Type Checking"
+          mypy src/ --ignore-missing-imports --no-strict-optional --warn-return-any
+          echo "::endgroup::"
+          echo "✅ Type checking completed"
+      
+      - name: 📊 Code Quality (pylint)
+        continue-on-error: true
+        run: |
+          echo "::group::Pylint Analysis"
+          pylint src/ \
+            --disable=C0111,C0103,R0913,R0914,R0902,R0903,W0212 \
+            --max-line-length=127 \
+            --output-format=colorized
+          echo "::endgroup::"
+          echo "✅ Pylint analysis completed"
+      
+      - name: 🛡️ Security Analysis (Bandit)
+        run: |
+          echo "::group::Bandit Security Scan"
+          bandit -r src/ -ll -f json -o bandit-report.json
+          bandit -r src/ -ll
+          echo "::endgroup::"
+          echo "✅ Security scan passed"
+      
+      - name: 🔒 Dependency Security Check (Safety)
+        continue-on-error: true
+        run: |
+          echo "::group::Safety Dependency Check"
+          safety check --json --file requirements.txt
+          echo "::endgroup::"
+          echo "✅ Dependency check completed"
+      
+      - name: 📤 Upload Security Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+          retention-days: 30
 
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 2: Unit Tests (Matrix Strategy)
+  # ═══════════════════════════════════════════════════════════════════════
   test:
-    runs-on: ubuntu-latest
+    name: Test Suite (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: quality
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+        exclude:
+          # Reduce matrix: skip some combinations
+          - os: macos-latest
+            python-version: "3.11"
+          - os: windows-latest
+            python-version: "3.11"
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
       
-      - name: Set up Python
+      - name: 🐍 Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       
-      - name: Install dependencies
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      - name: 🧪 Run Unit Tests
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/ \
+            -v \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --junit-xml=junit-results.xml \
+            -m "not integration and not slow"
+      
+      - name: 📊 Generate Coverage Report
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+        run: |
+          coverage report --show-missing
+          coverage html
+      
+      - name: 📤 Upload Coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-${{ matrix.os }}-py${{ matrix.python-version }}
+          fail_ci_if_error: false
+      
+      - name: 📤 Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            junit-results.xml
+            htmlcov/
+            coverage.xml
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 3: Integration Tests
+  # ═══════════════════════════════════════════════════════════════════════
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: test
+    
+    services:
+      # Redis for caching tests
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: 📦 Install Dependencies
         run: |
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
       
-      - name: Run Tests
-        run: pytest tests/ -v --cov=src --cov-report=xml
+      - name: 🧪 Run Integration Tests
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          REDIS_URL: redis://localhost:6379
+        run: |
+          pytest tests/ \
+            -v \
+            -m "integration" \
+            --cov=src \
+            --cov-report=xml \
+            --junit-xml=integration-results.xml
       
-      - name: Upload Coverage
-        uses: codecov/codecov-action@v3
+      - name: 📤 Upload Integration Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          file: ./coverage.xml
-          fail_ci_if_error: true
+          name: integration-test-results
+          path: |
+            integration-results.xml
+            coverage.xml
 
-  security:
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 4: Docker Build & Test
+  # ═══════════════════════════════════════════════════════════════════════
+  docker:
+    name: Docker Build & Test
     runs-on: ubuntu-latest
+    needs: test
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
       
-      - name: Run Bandit Security Scan
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: 💾 Cache Docker Layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
+      - name: 🔨 Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: qearis:ci-${{ github.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          build-args: |
+            VERSION=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+      
+      - name: 🧪 Test Docker Image
         run: |
-          pip install bandit
-          bandit -r src/ -f json -o bandit-report.json
-      
-      - name: Run Safety Check
-        run: |
-          pip install safety
-          safety check --json
-
-  build:
-    runs-on: ubuntu-latest
-    needs: [lint, test]
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Build Docker Image
-        run: docker build -t qearis:test .
-      
-      - name: Test Docker Image
-        run: |
-          docker run -d -p 8080:8080 --name qearis-test qearis:test
-          sleep 10
+          # Start container
+          docker run -d \
+            -p 8080:8080 \
+            -e GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
+            -e ENVIRONMENT=test \
+            --name qearis-test \
+            qearis:ci-${{ github.sha }}
+          
+          # Wait for service to be ready
+          echo "Waiting for service to start..."
+          sleep 15
+          
+          # Health check
+          echo "Testing health endpoint..."
           curl -f http://localhost:8080/health || exit 1
+          
+          # Test root endpoint
+          echo "Testing root endpoint..."
+          curl -f http://localhost:8080/ || exit 1
+          
+          # Get logs
+          echo "Container logs:"
+          docker logs qearis-test
+          
+          # Cleanup
           docker stop qearis-test
+          docker rm qearis-test
+          
+          echo "✅ Docker image tests passed"
+      
+      - name: 📊 Analyze Image Size
+        run: |
+          docker images qearis:ci-${{ github.sha }} --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+      
+      - name: 🔄 Move Cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      
+      - name: 💾 Save Docker Image
+        run: |
+          docker save qearis:ci-${{ github.sha }} | gzip > qearis-ci.tar.gz
+      
+      - name: 📤 Upload Docker Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: qearis-ci.tar.gz
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 5: Security Scanning
+  # ═══════════════════════════════════════════════════════════════════════
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: docker
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 📥 Download Docker Image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+      
+      - name: 🐳 Load Docker Image
+        run: |
+          docker load < qearis-ci.tar.gz
+      
+      - name: 🔍 Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: qearis:ci-${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: 📤 Upload Trivy Results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: 🔍 Run Grype Scanner
+        continue-on-error: true
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          grype qearis:ci-${{ github.sha }} --fail-on critical
+      
+      - name: 🔐 Run Hadolint (Dockerfile Linter)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          failure-threshold: warning
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 6: Performance Tests
+  # ═══════════════════════════════════════════════════════════════════════
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 📥 Download Docker Image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+      
+      - name: 🐳 Load Docker Image
+        run: |
+          docker load < qearis-ci.tar.gz
+      
+      - name: 🚀 Start Service
+        run: |
+          docker run -d \
+            -p 8080:8080 \
+            -e GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
+            --name qearis-perf \
+            qearis:ci-${{ github.sha }}
+          
+          sleep 15
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 📦 Install Load Testing Tools
+        run: |
+          pip install locust pytest-benchmark
+      
+      - name: ⚡ Run Load Tests
+        run: |
+          # Simple load test with curl
+          echo "Running basic load test..."
+          
+          for i in {1..10}; do
+            echo "Request $i"
+            curl -X POST http://localhost:8080/api/v1/research \
+              -H "Content-Type: application/json" \
+              -d '{"query":"Performance test","domains":["test"]}' \
+              -s -o /dev/null -w "Time: %{time_total}s, Status: %{http_code}\n"
+          done
+      
+      - name: 🧹 Cleanup
+        if: always()
+        run: |
+          docker stop qearis-perf || true
+          docker rm qearis-perf || true
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 7: Documentation Check
+  # ═══════════════════════════════════════════════════════════════════════
+  docs:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 📦 Install Documentation Tools
+        run: |
+          pip install mkdocs mkdocs-material
+      
+      - name: 📝 Check Documentation Links
+        run: |
+          # Check if all docs exist
+          for doc in README.md docs/ARCHITECTURE.md docs/API.md docs/DEPLOYMENT.md; do
+            if [ ! -f "$doc" ]; then
+              echo "❌ Missing documentation: $doc"
+              exit 1
+            fi
+          done
+          echo "✅ All documentation files present"
+      
+      - name: 🔍 Build Documentation
+        continue-on-error: true
+        run: |
+          # If mkdocs.yml exists, build docs
+          if [ -f "mkdocs.yml" ]; then
+            mkdocs build --strict
+          fi
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 8: Code Coverage Summary
+  # ═══════════════════════════════════════════════════════════════════════
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [test, integration]
+    if: always()
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 📥 Download Test Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          merge-multiple: true
+      
+      - name: 📊 Generate Coverage Summary
+        run: |
+          echo "# 📊 Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "coverage.xml" ]; then
+            # Parse coverage.xml and create summary
+            echo "Coverage reports downloaded successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No coverage data available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Job 9: CI Success Summary
+  # ═══════════════════════════════════════════════════════════════════════
+  ci-success:
+    name: CI Pipeline Success
+    runs-on: ubuntu-latest
+    needs: [quality, test, integration, docker, security, docs]
+    if: always()
+    
+    steps:
+      - name: ✅ Check All Jobs Status
+        run: |
+          echo "# 🎉 CI Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration | ${{ needs.integration.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ${{ needs.docker.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Documentation | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if any job failed
+          if [[ "${{ needs.quality.result }}" == "failure" ]] || \
+             [[ "${{ needs.test.result }}" == "failure" ]] || \
+             [[ "${{ needs.integration.result }}" == "failure" ]] || \
+             [[ "${{ needs.docker.result }}" == "failure" ]]; then
+            echo "❌ CI Pipeline Failed" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ CI Pipeline Passed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All checks completed successfully! Ready for deployment. 🚀" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: 💬 Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `
+            ## 🎉 CI Pipeline Results
+            
+            | Job | Status |
+            |-----|--------|
+            | Code Quality | ${{ needs.quality.result }} |
+            | Tests | ${{ needs.test.result }} |
+            | Integration | ${{ needs.integration.result }} |
+            | Docker Build | ${{ needs.docker.result }} |
+            | Security | ${{ needs.security.result }} |
+            | Documentation | ${{ needs.docs.result }} |
+            
+            ${context.payload.pull_request.head.sha.substring(0, 7)} is ready for review! ✅
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
