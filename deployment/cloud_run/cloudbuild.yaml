@@ -1,0 +1,163 @@
+# ============================================================================
+# QEARIS - Cloud Build Configuration
+# ============================================================================
+# 
+# CAPSTONE REQUIREMENT: Agent Deployment (BONUS - 5 points)
+# 
+# This Cloud Build configuration automates:
+# - Building the Docker container
+# - Running tests
+# - Pushing to Container Registry
+# - Deploying to Cloud Run
+# 
+# USAGE:
+#   gcloud builds submit --config deployment/cloud_run/cloudbuild.yaml
+# 
+# TRIGGER:
+#   Can be triggered on push to main branch via Cloud Build triggers
+# ============================================================================
+
+# Substitution variables (override at build time)
+substitutions:
+  _SERVICE_NAME: qearis
+  _REGION: us-central1
+  _MEMORY: 2Gi
+  _CPU: '2'
+  _MIN_INSTANCES: '1'
+  _MAX_INSTANCES: '10'
+  _TIMEOUT: '300'
+
+# Build steps
+steps:
+  # ============================================================================
+  # Step 1: Build Docker Image
+  # ============================================================================
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+      - '--cache-from'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+      - '.'
+    waitFor: ['-']  # Start immediately
+
+  # ============================================================================
+  # Step 2: Run Tests (Optional - Comment out if no tests)
+  # ============================================================================
+  - name: 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
+    id: 'test'
+    entrypoint: 'python'
+    args:
+      - '-m'
+      - 'pytest'
+      - 'tests/'
+      - '-v'
+      - '--ignore=tests/integration'
+    env:
+      - 'GEMINI_API_KEY=${_GEMINI_API_KEY}'
+    waitFor: ['build']
+
+  # ============================================================================
+  # Step 3: Push to Container Registry
+  # ============================================================================
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
+    waitFor: ['test']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-latest'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+    waitFor: ['push']
+
+  # ============================================================================
+  # Step 4: Deploy to Cloud Run
+  # ============================================================================
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '${_MEMORY}'
+      - '--cpu'
+      - '${_CPU}'
+      - '--min-instances'
+      - '${_MIN_INSTANCES}'
+      - '--max-instances'
+      - '${_MAX_INSTANCES}'
+      - '--timeout'
+      - '${_TIMEOUT}'
+      - '--port'
+      - '8080'
+      - '--set-secrets'
+      - 'GEMINI_API_KEY=gemini-api-key:latest'
+      - '--set-env-vars'
+      - 'ENVIRONMENT=production,LOG_LEVEL=INFO,ENABLE_TRACING=true'
+    waitFor: ['push-latest']
+
+  # ============================================================================
+  # Step 5: Verify Deployment
+  # ============================================================================
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'verify'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "Getting service URL..."
+        SERVICE_URL=$(gcloud run services describe ${_SERVICE_NAME} \
+          --region ${_REGION} \
+          --format "value(status.url)")
+        echo "Service URL: $SERVICE_URL"
+        
+        echo "Running health check..."
+        for i in {1..5}; do
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/health" || echo "000")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✓ Health check passed"
+            exit 0
+          fi
+          echo "Health check attempt $i: $HTTP_CODE"
+          sleep 10
+        done
+        
+        echo "WARNING: Health check did not pass after 5 attempts"
+        exit 1
+    waitFor: ['deploy']
+
+# Images to be pushed to Container Registry
+images:
+  - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+
+# Build options
+options:
+  # Use higher-performance machine
+  machineType: 'E2_HIGHCPU_8'
+  
+  # Enable logging
+  logging: CLOUD_LOGGING_ONLY
+  
+  # Set timeout for entire build (30 minutes)
+  timeout: '1800s'
+
+# Build timeout
+timeout: '1800s'
