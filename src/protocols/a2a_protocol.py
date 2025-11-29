@@ -128,6 +128,37 @@ class A2AMessage:
             'require_ack': self.require_ack
         }
     
+    def clone(self, **overrides) -> 'A2AMessage':
+        """
+        Create a copy of this message with optional overrides.
+        
+        This is the preferred method for creating message copies
+        (e.g., for broadcast) as it properly handles enum types.
+        
+        PARAMETERS:
+        -----------
+        **overrides : keyword arguments
+            Fields to override in the clone
+        
+        RETURNS:
+        --------
+        A2AMessage : New message instance
+        """
+        return A2AMessage(
+            message_id=overrides.get('message_id', str(uuid.uuid4())),
+            type=overrides.get('type', self.type),
+            priority=overrides.get('priority', self.priority),
+            timestamp=overrides.get('timestamp', self.timestamp),
+            sender=overrides.get('sender', self.sender),
+            recipient=overrides.get('recipient', self.recipient),
+            correlation_id=overrides.get('correlation_id', self.correlation_id),
+            action=overrides.get('action', self.action),
+            data=overrides.get('data', self.data.copy()),
+            metadata=overrides.get('metadata', self.metadata.copy()),
+            ttl=overrides.get('ttl', self.ttl),
+            require_ack=overrides.get('require_ack', self.require_ack)
+        )
+    
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'A2AMessage':
         """Create from dictionary."""
@@ -431,13 +462,8 @@ class A2AProtocol:
         """
         for agent_id in self._agents:
             if agent_id != message.sender:
-                broadcast_msg = A2AMessage(
-                    **{**message.to_dict(), 'recipient': agent_id}
-                )
-                # Fix type conversion
-                broadcast_msg.type = message.type
-                broadcast_msg.priority = message.priority
-                broadcast_msg.timestamp = message.timestamp
+                # Use clone method for proper type handling
+                broadcast_msg = message.clone(recipient=agent_id)
                 await self._queue.put(broadcast_msg)
         
         self._messages_sent += 1

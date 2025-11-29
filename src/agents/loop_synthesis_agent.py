@@ -106,7 +106,8 @@ class LoopSynthesisAgent(BaseLLMAgent[ResearchResult]):
         mcp_server: Any = None,
         memory_bank: Any = None,
         quality_threshold: float = 0.85,
-        max_iterations: int = 3
+        max_iterations: int = 3,
+        diminishing_returns_threshold: float = 0.01
     ):
         """
         Initialize the loop synthesis agent.
@@ -129,6 +130,8 @@ class LoopSynthesisAgent(BaseLLMAgent[ResearchResult]):
             Quality score to achieve for early termination (default: 0.85)
         max_iterations : int
             Maximum refinement iterations (default: 3)
+        diminishing_returns_threshold : float
+            Minimum improvement to continue iterating (default: 0.01)
         
         QUALITY THRESHOLD: 0.85
         -----------------------
@@ -153,6 +156,7 @@ class LoopSynthesisAgent(BaseLLMAgent[ResearchResult]):
         # ====================================================================
         self.quality_threshold = quality_threshold
         self.max_iterations = max_iterations
+        self.diminishing_returns_threshold = diminishing_returns_threshold
         
         logger.info(
             f"Loop Synthesis Agent initialized: {agent_id} "
@@ -294,9 +298,9 @@ class LoopSynthesisAgent(BaseLLMAgent[ResearchResult]):
                 # Check for diminishing returns (optional early stop)
                 if len(quality_history) >= 2:
                     improvement = quality_history[-1] - quality_history[-2]
-                    if improvement < 0.01:  # Less than 1% improvement
+                    if improvement < self.diminishing_returns_threshold:
                         logger.info(
-                            f"[LOOP] Diminishing returns detected, stopping"
+                            f"[LOOP] Diminishing returns detected (improvement: {improvement:.4f} < {self.diminishing_returns_threshold}), stopping"
                         )
                         break
                 

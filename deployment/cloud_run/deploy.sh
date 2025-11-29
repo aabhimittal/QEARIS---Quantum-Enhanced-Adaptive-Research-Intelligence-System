@@ -21,6 +21,7 @@
 # ============================================================================
 
 set -e  # Exit on any error
+set -o pipefail  # Ensure pipeline failures are caught
 
 # ============================================================================
 # Configuration (Override via environment or command line)

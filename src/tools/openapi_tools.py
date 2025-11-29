@@ -271,11 +271,35 @@ class OpenAPIToolGenerator:
     
     def _sanitize_tool_name(self, name: str) -> str:
         """Sanitize operation ID to valid tool name."""
-        # Remove invalid characters
-        sanitized = name.replace('-', '_').replace('.', '_')
+        import re
+        
+        # Remove or replace invalid characters
+        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+        
+        # Replace multiple underscores with single
+        sanitized = re.sub(r'_+', '_', sanitized)
+        
+        # Remove leading/trailing underscores
+        sanitized = sanitized.strip('_')
+        
         # Ensure starts with letter
         if sanitized and sanitized[0].isdigit():
             sanitized = 'api_' + sanitized
+        
+        # Handle empty string
+        if not sanitized:
+            sanitized = 'api_tool'
+        
+        # Handle Python reserved keywords
+        python_keywords = {
+            'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue',
+            'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from',
+            'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not',
+            'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield'
+        }
+        if sanitized.lower() in python_keywords:
+            sanitized = f'tool_{sanitized}'
+        
         return sanitized.lower()
     
     def _extract_parameters(self, operation: Dict[str, Any]) -> Dict[str, Any]:
