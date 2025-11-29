@@ -42,7 +42,7 @@ class SynthesisAgent(BaseAgent):
     
     async def execute_task(
         self,
-        research_results: List[ResearchResult],
+        task_input,
         max_iterations: int = 3
     ) -> ResearchResult:
         """
@@ -63,7 +63,22 @@ class SynthesisAgent(BaseAgent):
         - High enough for quality
         - Not perfectionist (0.95+ rarely achievable)
         - Balances quality vs time
+        
+        PARAMETERS:
+        -----------
+        task_input: Either a list of ResearchResult or a dict with:
+                   - research_results: List of research results
+                   - validation_results: List of validation results (optional)
+                   - iteration: Current iteration number (optional)
         """
+        # Handle both dict and list input formats
+        if isinstance(task_input, dict):
+            research_results = task_input.get('research_results', [])
+        elif isinstance(task_input, list):
+            research_results = task_input
+        else:
+            research_results = [task_input]
+        
         start_time = datetime.now()
         
         logger.info(

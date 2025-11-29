@@ -112,16 +112,34 @@ async def test_validation_agent_execution(mock_gemini_model, mock_mcp_server):
 @pytest.mark.asyncio
 async def test_synthesis_agent_execution(mock_gemini_model, mock_mcp_server):
     """Test synthesis agent"""
+    # Mock the generate_content to return proper response
+    mock_gemini_model.generate_content = Mock(
+        return_value=Mock(text="This is a synthesized result with good structure.\n\n1. Point one\n2. Point two\n\nConclusion reached.")
+    )
+    
     agent = SynthesisAgent(
         agent_id="test_synthesizer",
         gemini_model=mock_gemini_model,
         mcp_server=mock_mcp_server
     )
     
-    # Mock research results
+    # Mock research results with proper structure
+    from src.orchestrator.task_models import ResearchResult
     research_results = [
-        Mock(content="Result 1", sources=["src1"], confidence=0.9),
-        Mock(content="Result 2", sources=["src2"], confidence=0.85)
+        ResearchResult(
+            task_id="task_1",
+            agent_id="agent_1",
+            content="Result 1",
+            sources=["src1"],
+            confidence=0.9
+        ),
+        ResearchResult(
+            task_id="task_2",
+            agent_id="agent_2",
+            content="Result 2",
+            sources=["src2"],
+            confidence=0.85
+        )
     ]
     
     synthesis = await agent.execute_task({
@@ -168,7 +186,7 @@ async def test_agent_memory_storage(
         memory_bank=mock_memory_bank
     )
     
-    agent.store_experience("Test experience", importance=0.8)
+    await agent.store_experience("Test experience", importance=0.8)
     
     assert mock_memory_bank.store_memory.called
 

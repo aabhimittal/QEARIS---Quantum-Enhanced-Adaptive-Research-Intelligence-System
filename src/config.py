@@ -3,7 +3,7 @@ QEARIS Configuration Management
 Centralized settings using Pydantic
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 import os
 
@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     
     Loads from environment variables with fallback to .env file
     """
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True
+    )
     
     # Gemini API
     GEMINI_API_KEY: str
@@ -68,10 +72,6 @@ class Settings(BaseSettings):
     # Optional APIs
     ANTHROPIC_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 # Global settings instance

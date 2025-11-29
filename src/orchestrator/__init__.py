@@ -7,7 +7,6 @@ Includes:
 - Workflow coordination
 """
 
-from src.orchestrator.multi_agent_orchestrator import MultiAgentOrchestrator
 from src.orchestrator.task_models import (
     Task,
     Agent,
@@ -20,8 +19,13 @@ from src.orchestrator.task_models import (
     Memory
 )
 
+# Lazy import to avoid circular dependencies
+def get_multi_agent_orchestrator():
+    from src.orchestrator.multi_agent_orchestrator import MultiAgentOrchestrator
+    return MultiAgentOrchestrator
+
 __all__ = [
-    "MultiAgentOrchestrator",
+    "get_multi_agent_orchestrator",
     "Task",
     "Agent",
     "ResearchResult",
