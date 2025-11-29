@@ -7,15 +7,22 @@ Includes:
 - Workflow coordination
 """
 
-from src.orchestrator.task_models import (Agent, AgentType, Memory, MemoryType,
-                                          Priority, ResearchResult,
-                                          SessionState, Task, TaskState)
+from src.orchestrator.task_models import (
+    Agent,
+    AgentType,
+    Memory,
+    MemoryType,
+    Priority,
+    ResearchResult,
+    SessionState,
+    Task,
+    TaskState,
+)
 
 
 # Lazy import to avoid circular dependencies
 def get_multi_agent_orchestrator():
-    from src.orchestrator.multi_agent_orchestrator import \
-        MultiAgentOrchestrator
+    from src.orchestrator.multi_agent_orchestrator import MultiAgentOrchestrator
 
     return MultiAgentOrchestrator
 

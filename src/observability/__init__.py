@@ -21,10 +21,8 @@
 """
 
 from src.observability.logging_config import JSONFormatter, setup_logging
-from src.observability.metrics import (Metric, MetricsCollector,
-                                       metrics_collector)
-from src.observability.tracing import (Span, SpanKind, SpanStatus, Tracer,
-                                       get_tracer, trace_function)
+from src.observability.metrics import Metric, MetricsCollector, metrics_collector
+from src.observability.tracing import Span, SpanKind, SpanStatus, Tracer, get_tracer, trace_function
 
 __all__ = [
     # Metrics

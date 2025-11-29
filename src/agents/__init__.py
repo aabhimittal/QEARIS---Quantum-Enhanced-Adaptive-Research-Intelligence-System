@@ -25,20 +25,21 @@
 
 # Legacy agents (backward compatibility)
 from src.agents.base_agent import Agent, AgentType, BaseAgent
+
 # New LLM-powered agents with capstone comments
-from src.agents.base_llm_agent import (BaseLLMAgent, LLMAgentConfig,
-                                       LLMAgentMetrics, LLMAgentType)
-from src.agents.gemini_agent import (GeminiAgent, GeminiAgentConfig,
-                                     create_gemini_agent)
-from src.agents.loop_synthesis_agent import (LoopSynthesisAgent,
-                                             execute_synthesis_loop)
-from src.agents.parallel_research_agent import (ParallelResearchAgent,
-                                                execute_parallel_research)
+from src.agents.base_llm_agent import BaseLLMAgent, LLMAgentConfig, LLMAgentMetrics, LLMAgentType
+from src.agents.gemini_agent import GeminiAgent, GeminiAgentConfig, create_gemini_agent
+from src.agents.loop_synthesis_agent import LoopSynthesisAgent, execute_synthesis_loop
+from src.agents.parallel_research_agent import ParallelResearchAgent, execute_parallel_research
 from src.agents.quantum_coordinator_agent import (
-    QuantumCoordinatorAgent, coordinate_with_quantum_optimization)
+    QuantumCoordinatorAgent,
+    coordinate_with_quantum_optimization,
+)
 from src.agents.research_agent import ResearchAgent
 from src.agents.sequential_validator_agent import (
-    SequentialValidatorAgent, execute_sequential_validation)
+    SequentialValidatorAgent,
+    execute_sequential_validation,
+)
 from src.agents.synthesis_agent import SynthesisAgent
 from src.agents.validation_agent import ValidationAgent
 

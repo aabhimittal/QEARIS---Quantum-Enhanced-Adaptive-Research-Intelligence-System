@@ -64,9 +64,15 @@ def mock_components():
 
 def test_task_models_import():
     """Test that task models can be imported"""
-    from src.orchestrator.task_models import (Memory, MemoryType, Priority,
-                                              ResearchResult, SessionState,
-                                              Task, TaskState)
+    from src.orchestrator.task_models import (
+        Memory,
+        MemoryType,
+        Priority,
+        ResearchResult,
+        SessionState,
+        Task,
+        TaskState,
+    )
 
     task = Task(description="Test", domain="test", priority=Priority.HIGH)
     assert task.state == TaskState.CREATED
@@ -92,8 +98,7 @@ def test_session_state():
 @pytest.mark.asyncio
 async def test_orchestrator_creation(mock_config, mock_components):
     """Test orchestrator can be created"""
-    from src.orchestrator.multi_agent_orchestrator import \
-        MultiAgentOrchestrator
+    from src.orchestrator.multi_agent_orchestrator import MultiAgentOrchestrator
 
     orchestrator = MultiAgentOrchestrator(
         quantum_optimizer=mock_components["quantum_optimizer"],
@@ -110,8 +115,7 @@ async def test_orchestrator_creation(mock_config, mock_components):
 @pytest.mark.asyncio
 async def test_parallel_research_execution(mock_config, mock_components):
     """Test parallel research execution"""
-    from src.orchestrator.multi_agent_orchestrator import \
-        MultiAgentOrchestrator
+    from src.orchestrator.multi_agent_orchestrator import MultiAgentOrchestrator
     from src.orchestrator.task_models import Priority, Task
 
     orchestrator = MultiAgentOrchestrator(

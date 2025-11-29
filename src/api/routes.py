@@ -11,8 +11,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from ..config import settings
 from ..orchestrator.multi_agent_orchestrator import MultiAgentOrchestrator
-from .schemas import (AgentEvaluationResponse, MetricsResponse,
-                      ResearchRequest, ResearchResponse, SessionResponse)
+from .schemas import (
+    AgentEvaluationResponse,
+    MetricsResponse,
+    ResearchRequest,
+    ResearchResponse,
+    SessionResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

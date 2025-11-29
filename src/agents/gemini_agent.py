@@ -31,8 +31,7 @@ from typing import Any, Dict, List, Optional
 
 import google.generativeai as genai
 
-from src.agents.base_llm_agent import (BaseLLMAgent, LLMAgentConfig,
-                                       LLMAgentType)
+from src.agents.base_llm_agent import BaseLLMAgent, LLMAgentConfig, LLMAgentType
 from src.orchestrator.task_models import MemoryType, ResearchResult, Task
 
 # ============================================================================
