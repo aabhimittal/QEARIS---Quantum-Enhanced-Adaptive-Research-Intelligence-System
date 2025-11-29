@@ -45,27 +45,40 @@ class MemoryType(Enum):
     OBSERVATION = "observation"
 
 
-@dataclass(unsafe_hash=True)
+@dataclass(eq=False)
 class Task:
     """
     Research task definition
     
     DESIGN:
-    - Unique ID for tracking
+    - Unique ID for tracking (immutable, used for hashing)
     - Priority for scheduling
-    - State for lifecycle management
-    - Metadata for flexibility
+    - State for lifecycle management (mutable, not used for hashing)
+    - Metadata for flexibility (mutable, not used for hashing)
+    
+    Note: Hash is based on the immutable `id` field only to ensure
+    consistency when the task is used in sets/dicts.
     """
     description: str
     domain: str
     priority: Priority = Priority.MEDIUM
     
-    id: str = field(default_factory=lambda: str(uuid.uuid4()), hash=True)
-    state: TaskState = field(default=TaskState.CREATED, hash=False)
-    assigned_agent: Optional[str] = field(default=None, hash=False)
-    created_at: datetime = field(default_factory=datetime.now, hash=False)
-    completed_at: Optional[datetime] = field(default=None, hash=False)
-    metadata: Dict[str, Any] = field(default_factory=dict, hash=False)
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    state: TaskState = field(default=TaskState.CREATED)
+    assigned_agent: Optional[str] = field(default=None)
+    created_at: datetime = field(default_factory=datetime.now)
+    completed_at: Optional[datetime] = field(default=None)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def __hash__(self) -> int:
+        """Hash based on immutable id field only"""
+        return hash(self.id)
+    
+    def __eq__(self, other: object) -> bool:
+        """Equality based on id field"""
+        if not isinstance(other, Task):
+            return NotImplemented
+        return self.id == other.id
     
     def assign_to(self, agent_id: str):
         """Assign task to agent"""

@@ -16,7 +16,7 @@ scipy==1.12.0
 # RAG & Embeddings
 chromadb==0.4.22
 sentence-transformers==2.3.1
-faiss-cpu>=1.8.0
+faiss-cpu>=1.8.0,<2.0.0
 
 # Tools & Utilities
 aiohttp==3.9.3
