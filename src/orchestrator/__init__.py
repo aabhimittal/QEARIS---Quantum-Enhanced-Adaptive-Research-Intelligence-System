@@ -8,21 +8,24 @@ Includes:
 """
 
 from src.orchestrator.task_models import (
-    Task,
     Agent,
+    AgentType,
+    Memory,
+    MemoryType,
+    Priority,
     ResearchResult,
     SessionState,
-    Priority,
+    Task,
     TaskState,
-    AgentType,
-    MemoryType,
-    Memory
 )
+
 
 # Lazy import to avoid circular dependencies
 def get_multi_agent_orchestrator():
     from src.orchestrator.multi_agent_orchestrator import MultiAgentOrchestrator
+
     return MultiAgentOrchestrator
+
 
 __all__ = [
     "get_multi_agent_orchestrator",
@@ -34,5 +37,5 @@ __all__ = [
     "TaskState",
     "AgentType",
     "MemoryType",
-    "Memory"
+    "Memory",
 ]

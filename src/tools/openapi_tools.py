@@ -39,22 +39,23 @@ logger = logging.getLogger(__name__)
 class OpenAPITool:
     """
     Tool generated from OpenAPI specification.
-    
+
     CAPSTONE REQUIREMENT: OpenAPI Tools
     Represents a tool dynamically created from an OpenAPI endpoint.
     """
+
     name: str
     description: str
     method: str  # HTTP method (GET, POST, PUT, DELETE)
-    path: str    # API path
+    path: str  # API path
     parameters: Dict[str, Any] = field(default_factory=dict)
     request_body: Optional[Dict[str, Any]] = None
     base_url: str = ""
     headers: Dict[str, str] = field(default_factory=dict)
-    
+
     # Generated handler
     handler: Optional[Callable] = None
-    
+
     # Metadata
     operation_id: str = ""
     tags: List[str] = field(default_factory=list)
@@ -63,15 +64,15 @@ class OpenAPITool:
 class OpenAPIToolGenerator:
     """
     Generate MCP tools from OpenAPI specifications.
-    
+
     ============================================================================
     CAPSTONE REQUIREMENT: OpenAPI Tools
     POINTS: Technical Implementation - 20 points
-    
+
     DESCRIPTION:
     This class parses OpenAPI 3.0 specifications and generates MCP-compatible
     tools that can be registered with the MCP server.
-    
+
     FEATURES:
     ---------
     1. Parses OpenAPI 3.0 JSON/YAML specs
@@ -79,13 +80,13 @@ class OpenAPIToolGenerator:
     3. Converts parameters to JSON Schema
     4. Generates async handlers
     5. Supports authentication headers
-    
+
     USE CASES:
     ----------
     - Integrate with REST APIs automatically
     - Add third-party services without custom code
     - Dynamic API discovery and integration
-    
+
     EXAMPLE:
     --------
     ```python
@@ -101,16 +102,16 @@ class OpenAPIToolGenerator:
     ```
     ============================================================================
     """
-    
+
     def __init__(
         self,
         default_headers: Optional[Dict[str, str]] = None,
         api_key: Optional[str] = None,
-        timeout: int = 30
+        timeout: int = 30,
     ):
         """
         Initialize the OpenAPI tool generator.
-        
+
         PARAMETERS:
         -----------
         default_headers : Dict (optional)
@@ -123,83 +124,81 @@ class OpenAPIToolGenerator:
         self.default_headers = default_headers or {}
         self.api_key = api_key
         self.timeout = timeout
-        
+
         logger.info("OpenAPI Tool Generator initialized")
-    
+
     async def generate_from_spec(
-        self,
-        spec: Dict[str, Any],
-        base_url: Optional[str] = None
+        self, spec: Dict[str, Any], base_url: Optional[str] = None
     ) -> List[OpenAPITool]:
         """
         Generate tools from OpenAPI specification dictionary.
-        
+
         CAPSTONE REQUIREMENT: OpenAPI Tools
-        
+
         PARAMETERS:
         -----------
         spec : Dict
             Parsed OpenAPI specification
         base_url : str (optional)
             Override base URL from spec
-        
+
         RETURNS:
         --------
         List[OpenAPITool] : Generated tools
         """
         tools = []
-        
+
         # Extract base URL
         if base_url:
             api_base = base_url
-        elif 'servers' in spec and spec['servers']:
-            api_base = spec['servers'][0].get('url', '')
+        elif "servers" in spec and spec["servers"]:
+            api_base = spec["servers"][0].get("url", "")
         else:
-            api_base = ''
-        
+            api_base = ""
+
         # Extract API info
-        api_title = spec.get('info', {}).get('title', 'API')
-        
+        api_title = spec.get("info", {}).get("title", "API")
+
         logger.info(f"Generating tools from OpenAPI spec: {api_title}")
-        
+
         # Process each path
-        paths = spec.get('paths', {})
+        paths = spec.get("paths", {})
         for path, path_item in paths.items():
-            
+
             # Process each HTTP method
-            for method in ['get', 'post', 'put', 'delete', 'patch']:
+            for method in ["get", "post", "put", "delete", "patch"]:
                 if method not in path_item:
                     continue
-                
+
                 operation = path_item[method]
-                
+
                 # Generate tool from operation
                 tool = self._create_tool_from_operation(
                     path=path,
                     method=method,
                     operation=operation,
                     base_url=api_base,
-                    api_title=api_title
+                    api_title=api_title,
                 )
-                
+
                 if tool:
                     tools.append(tool)
-        
+
         logger.info(f"Generated {len(tools)} tools from OpenAPI spec")
-        
+
         return tools
-    
+
     async def generate_from_url(self, url: str) -> List[OpenAPITool]:
         """
         Generate tools from OpenAPI spec URL.
-        
+
         CAPSTONE REQUIREMENT: OpenAPI Tools
-        
+
         PARAMETERS:
         -----------
         url : str
             URL to OpenAPI specification (JSON/YAML)
-        
+
         RETURNS:
         --------
         List[OpenAPITool] : Generated tools
@@ -207,51 +206,43 @@ class OpenAPIToolGenerator:
         # This would fetch and parse the spec
         # For demo, return empty list
         logger.info(f"Would fetch OpenAPI spec from: {url}")
-        
+
         # In production:
         # async with aiohttp.ClientSession() as session:
         #     async with session.get(url) as response:
         #         spec = await response.json()
         #         return await self.generate_from_spec(spec)
-        
+
         return []
-    
+
     def _create_tool_from_operation(
-        self,
-        path: str,
-        method: str,
-        operation: Dict[str, Any],
-        base_url: str,
-        api_title: str
+        self, path: str, method: str, operation: Dict[str, Any], base_url: str, api_title: str
     ) -> Optional[OpenAPITool]:
         """
         Create a tool from an OpenAPI operation.
-        
+
         CAPSTONE REQUIREMENT: OpenAPI Tools
         """
         # Extract operation details
-        operation_id = operation.get('operationId', f"{method}_{path.replace('/', '_')}")
-        summary = operation.get('summary', f"{method.upper()} {path}")
-        description = operation.get('description', summary)
-        tags = operation.get('tags', [])
-        
+        operation_id = operation.get("operationId", f"{method}_{path.replace('/', '_')}")
+        summary = operation.get("summary", f"{method.upper()} {path}")
+        description = operation.get("description", summary)
+        tags = operation.get("tags", [])
+
         # Build tool name
         tool_name = self._sanitize_tool_name(operation_id)
-        
+
         # Extract parameters
         parameters = self._extract_parameters(operation)
-        
+
         # Extract request body schema
         request_body = self._extract_request_body(operation)
-        
+
         # Create handler
         handler = self._create_handler(
-            base_url=base_url,
-            path=path,
-            method=method,
-            parameters=parameters
+            base_url=base_url, path=path, method=method, parameters=parameters
         )
-        
+
         # Build tool
         tool = OpenAPITool(
             name=tool_name,
@@ -264,131 +255,149 @@ class OpenAPIToolGenerator:
             headers=self.default_headers.copy(),
             handler=handler,
             operation_id=operation_id,
-            tags=tags
+            tags=tags,
         )
-        
+
         return tool
-    
+
     def _sanitize_tool_name(self, name: str) -> str:
         """Sanitize operation ID to valid tool name."""
         import re
-        
+
         # Remove or replace invalid characters
-        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
-        
+        sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+
         # Replace multiple underscores with single
-        sanitized = re.sub(r'_+', '_', sanitized)
-        
+        sanitized = re.sub(r"_+", "_", sanitized)
+
         # Remove leading/trailing underscores
-        sanitized = sanitized.strip('_')
-        
+        sanitized = sanitized.strip("_")
+
         # Ensure starts with letter
         if sanitized and sanitized[0].isdigit():
-            sanitized = 'api_' + sanitized
-        
+            sanitized = "api_" + sanitized
+
         # Handle empty string
         if not sanitized:
-            sanitized = 'api_tool'
-        
+            sanitized = "api_tool"
+
         # Handle Python reserved keywords
         python_keywords = {
-            'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue',
-            'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from',
-            'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not',
-            'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield'
+            "and",
+            "as",
+            "assert",
+            "async",
+            "await",
+            "break",
+            "class",
+            "continue",
+            "def",
+            "del",
+            "elif",
+            "else",
+            "except",
+            "finally",
+            "for",
+            "from",
+            "global",
+            "if",
+            "import",
+            "in",
+            "is",
+            "lambda",
+            "nonlocal",
+            "not",
+            "or",
+            "pass",
+            "raise",
+            "return",
+            "try",
+            "while",
+            "with",
+            "yield",
         }
         if sanitized.lower() in python_keywords:
-            sanitized = f'tool_{sanitized}'
-        
+            sanitized = f"tool_{sanitized}"
+
         return sanitized.lower()
-    
+
     def _extract_parameters(self, operation: Dict[str, Any]) -> Dict[str, Any]:
         """
         Extract and convert parameters to JSON Schema.
-        
+
         CAPSTONE REQUIREMENT: OpenAPI Tools
         Converts OpenAPI parameters to MCP-compatible JSON Schema.
         """
-        params = operation.get('parameters', [])
-        
+        params = operation.get("parameters", [])
+
         properties = {}
         required = []
-        
+
         for param in params:
-            name = param.get('name')
-            schema = param.get('schema', {})
-            param_required = param.get('required', False)
-            param_description = param.get('description', '')
-            
+            name = param.get("name")
+            schema = param.get("schema", {})
+            param_required = param.get("required", False)
+            param_description = param.get("description", "")
+
             # Build property schema
-            prop = {
-                'type': schema.get('type', 'string'),
-                'description': param_description
-            }
-            
+            prop = {"type": schema.get("type", "string"), "description": param_description}
+
             # Add format if present
-            if 'format' in schema:
-                prop['format'] = schema['format']
-            
+            if "format" in schema:
+                prop["format"] = schema["format"]
+
             # Add enum if present
-            if 'enum' in schema:
-                prop['enum'] = schema['enum']
-            
+            if "enum" in schema:
+                prop["enum"] = schema["enum"]
+
             # Add default if present
-            if 'default' in schema:
-                prop['default'] = schema['default']
-            
+            if "default" in schema:
+                prop["default"] = schema["default"]
+
             properties[name] = prop
-            
+
             if param_required:
                 required.append(name)
-        
-        return {
-            'type': 'object',
-            'properties': properties,
-            'required': required
-        }
-    
+
+        return {"type": "object", "properties": properties, "required": required}
+
     def _extract_request_body(self, operation: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Extract request body schema."""
-        request_body = operation.get('requestBody')
-        
+        request_body = operation.get("requestBody")
+
         if not request_body:
             return None
-        
-        content = request_body.get('content', {})
-        
+
+        content = request_body.get("content", {})
+
         # Prefer JSON
-        if 'application/json' in content:
-            return content['application/json'].get('schema')
-        
+        if "application/json" in content:
+            return content["application/json"].get("schema")
+
         return None
-    
+
     def _create_handler(
-        self,
-        base_url: str,
-        path: str,
-        method: str,
-        parameters: Dict[str, Any]
+        self, base_url: str, path: str, method: str, parameters: Dict[str, Any]
     ) -> Callable:
         """
         Create async handler for the tool.
-        
+
         CAPSTONE REQUIREMENT: OpenAPI Tools
         Generates handler that makes actual API calls.
         """
+
         async def handler(**kwargs) -> Dict[str, Any]:
             """
             Generated handler for OpenAPI operation.
-            
+
             In production, this would make actual HTTP requests.
             For demo, returns simulated response.
             """
             logger.debug(f"OpenAPI tool invoked: {method.upper()} {path}")
-            
+
             # Build URL
             url = urljoin(base_url, path)
-            
+
             # In production:
             # async with aiohttp.ClientSession() as session:
             #     if method == 'get':
@@ -397,33 +406,31 @@ class OpenAPIToolGenerator:
             #     elif method == 'post':
             #         async with session.post(url, json=kwargs) as response:
             #             return await response.json()
-            
+
             # Simulated response
             return {
                 "status": "success",
                 "method": method.upper(),
                 "url": url,
                 "parameters": kwargs,
-                "message": f"Would execute {method.upper()} {url}"
+                "message": f"Would execute {method.upper()} {url}",
             }
-        
+
         return handler
 
 
 async def generate_tools_from_spec(
-    spec: Dict[str, Any],
-    mcp_server: Any = None,
-    base_url: Optional[str] = None
+    spec: Dict[str, Any], mcp_server: Any = None, base_url: Optional[str] = None
 ) -> List[OpenAPITool]:
     """
     Generate and optionally register tools from OpenAPI spec.
-    
+
     ============================================================================
     CAPSTONE REQUIREMENT: OpenAPI Tools
-    
+
     Convenience function to generate tools from an OpenAPI specification
     and optionally register them with an MCP server.
-    
+
     PARAMETERS:
     -----------
     spec : Dict
@@ -432,11 +439,11 @@ async def generate_tools_from_spec(
         MCP server to register tools with
     base_url : str (optional)
         Override base URL
-    
+
     RETURNS:
     --------
     List[OpenAPITool] : Generated tools
-    
+
     EXAMPLE:
     --------
     ```python
@@ -455,14 +462,14 @@ async def generate_tools_from_spec(
             }
         }
     }
-    
+
     tools = await generate_tools_from_spec(spec, mcp_server)
     ```
     ============================================================================
     """
     generator = OpenAPIToolGenerator()
     tools = await generator.generate_from_spec(spec, base_url)
-    
+
     if mcp_server:
         registered = 0
         for tool in tools:
@@ -471,14 +478,14 @@ async def generate_tools_from_spec(
                     name=tool.name,
                     description=tool.description,
                     handler=tool.handler,
-                    parameters=tool.parameters
+                    parameters=tool.parameters,
                 )
                 registered += 1
             except Exception as e:
                 logger.error(f"Failed to register OpenAPI tool {tool.name}: {e}")
-        
+
         logger.info(f"Registered {registered} OpenAPI tools")
-    
+
     return tools
 
 
@@ -491,11 +498,9 @@ EXAMPLE_OPENAPI_SPEC = {
     "info": {
         "title": "Research API",
         "version": "1.0.0",
-        "description": "Example API for research operations"
+        "description": "Example API for research operations",
     },
-    "servers": [
-        {"url": "https://api.research.example.com/v1"}
-    ],
+    "servers": [{"url": "https://api.research.example.com/v1"}],
     "paths": {
         "/papers": {
             "get": {
@@ -508,19 +513,17 @@ EXAMPLE_OPENAPI_SPEC = {
                         "in": "query",
                         "required": True,
                         "schema": {"type": "string"},
-                        "description": "Search query"
+                        "description": "Search query",
                     },
                     {
                         "name": "limit",
                         "in": "query",
                         "required": False,
                         "schema": {"type": "integer", "default": 10},
-                        "description": "Maximum results"
-                    }
+                        "description": "Maximum results",
+                    },
                 ],
-                "responses": {
-                    "200": {"description": "Successful response"}
-                }
+                "responses": {"200": {"description": "Successful response"}},
             },
             "post": {
                 "operationId": "createPaper",
@@ -534,14 +537,14 @@ EXAMPLE_OPENAPI_SPEC = {
                                 "properties": {
                                     "title": {"type": "string"},
                                     "authors": {"type": "array", "items": {"type": "string"}},
-                                    "abstract": {"type": "string"}
+                                    "abstract": {"type": "string"},
                                 },
-                                "required": ["title"]
+                                "required": ["title"],
                             }
                         }
-                    }
-                }
-            }
+                    },
+                },
+            },
         },
         "/papers/{id}": {
             "get": {
@@ -553,10 +556,10 @@ EXAMPLE_OPENAPI_SPEC = {
                         "in": "path",
                         "required": True,
                         "schema": {"type": "string"},
-                        "description": "Paper ID"
+                        "description": "Paper ID",
                     }
-                ]
+                ],
             }
-        }
-    }
+        },
+    },
 }

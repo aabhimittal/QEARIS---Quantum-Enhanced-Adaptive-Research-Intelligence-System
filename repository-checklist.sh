@@ -25,9 +25,9 @@ curl $SERVICE_URL/health
 
 ---
 
-## 📋 Submission Checklist for Kaggle Competition
+## Submission Checklist for Kaggle Competition
 
-### ✅ Required Components
+### Required Components
 
 - [x] **Multi-agent system**
   - Parallel agents (Research agents)
@@ -68,7 +68,7 @@ curl $SERVICE_URL/health
   - Function calling
   - Grounding
 
-### 📄 Documentation
+### Documentation
 
 - [x] README.md with setup instructions
 - [x] ARCHITECTURE.md with detailed design
@@ -76,7 +76,7 @@ curl $SERVICE_URL/health
 - [x] API.md with endpoint documentation
 - [x] Code comments explaining implementation
 
-### 🚀 Deployment Evidence
+### Deployment Evidence
 
 **Live Endpoint:** `https://qearis-[hash]-uc.a.run.app`
 
@@ -87,7 +87,7 @@ curl $SERVICE_URL/health
 4. Scaling settings
 5. Monitoring setup
 
-### 📊 Performance Metrics
+### Performance Metrics
 ```
 Metric                    Value
 ------------------------  -------

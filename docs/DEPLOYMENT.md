@@ -1,4 +1,4 @@
-# 🚀 QEARIS Deployment Guide
+# QEARIS Deployment Guide
 
 Complete guide for deploying QEARIS to production.
 

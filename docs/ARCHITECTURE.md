@@ -270,7 +270,7 @@ Where:
    ↓
    Iteration 1: Combine findings → Quality: 0.78
    Iteration 2: Refine synthesis → Quality: 0.84
-   Iteration 3: Final polish → Quality: 0.89 ✓
+   Iteration 3: Final polish → Quality: 0.89 [OK]
    ↓
 
 8. RESPONSE PACKAGING
@@ -372,10 +372,10 @@ async def execute_loop(data, max_iterations=3):
 **Alternatives Considered:**
 | Approach | Pros | Cons | Chosen? |
 |----------|------|------|---------|
-| Greedy | Fast (O(n)) | Suboptimal (30% worse) | ❌ |
-| Brute Force | Optimal | Intractable (O(m^n)) | ❌ |
-| Genetic Algorithm | Good quality | Slow convergence | ❌ |
-| **Simulated Annealing** | **Near-optimal, Fast** | **Requires tuning** | **✅** |
+| Greedy | Fast (O(n)) | Suboptimal (30% worse) | [ERROR] |
+| Brute Force | Optimal | Intractable (O(m^n)) | [ERROR] |
+| Genetic Algorithm | Good quality | Slow convergence | [ERROR] |
+| **Simulated Annealing** | **Near-optimal, Fast** | **Requires tuning** | **[OK]** |
 
 **Rationale:** Simulated annealing provides 95% optimal solution in 100 iterations (~100ms), making it practical for real-time use.
 
@@ -384,9 +384,9 @@ async def execute_loop(data, max_iterations=3):
 **Alternatives Considered:**
 | Database | Pros | Cons | Chosen? |
 |----------|------|------|---------|
-| Pinecone | Managed, scalable | Cost, vendor lock-in | ❌ |
-| Weaviate | Feature-rich | Complex setup | ❌ |
-| **ChromaDB** | **Simple, free, fast** | **Single-node only** | **✅** |
+| Pinecone | Managed, scalable | Cost, vendor lock-in | [ERROR] |
+| Weaviate | Feature-rich | Complex setup | [ERROR] |
+| **ChromaDB** | **Simple, free, fast** | **Single-node only** | **[OK]** |
 
 **Rationale:** ChromaDB provides excellent performance for our scale (<100K vectors) with zero operational overhead.
 
@@ -395,10 +395,10 @@ async def execute_loop(data, max_iterations=3):
 **Comparison:**
 | Feature | FastAPI | Flask |
 |---------|---------|-------|
-| Async Support | ✅ Native | ❌ Requires extensions |
-| Type Validation | ✅ Pydantic | ❌ Manual |
-| API Docs | ✅ Auto-generated | ❌ Manual |
-| Performance | ✅ ~3x faster | ❌ Slower |
+| Async Support | [OK] Native | [ERROR] Requires extensions |
+| Type Validation | [OK] Pydantic | [ERROR] Manual |
+| API Docs | [OK] Auto-generated | [ERROR] Manual |
+| Performance | [OK] ~3x faster | [ERROR] Slower |
 
 **Rationale:** FastAPI's native async support and automatic validation are critical for our multi-agent concurrency model.
 
@@ -456,13 +456,13 @@ nlp_db: NLP datasets
 
 ### API Key Management
 
-**✅ Secure:**
+**[OK] Secure:**
 ```python
 # Load from environment
 api_key = os.getenv("GEMINI_API_KEY")
 ```
 
-**❌ Insecure:**
+**[ERROR] Insecure:**
 ```python
 # NEVER hardcode
 api_key = "AIzaSy..."

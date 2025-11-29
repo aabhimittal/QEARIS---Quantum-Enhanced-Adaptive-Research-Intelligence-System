@@ -48,7 +48,7 @@ jobs:
       should-deploy: ${{ steps.check.outputs.should-deploy }}
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -71,28 +71,28 @@ jobs:
           echo "environment=$ENV" >> $GITHUB_OUTPUT
           echo "🌍 Environment: $ENV"
       
-      - name: ✅ Deployment Checks
+      - name: Deployment Checks
         id: check
         run: |
           echo "should-deploy=true" >> $GITHUB_OUTPUT
           
           # Check if secrets are configured
           if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-            echo "❌ GCP_SA_KEY secret not configured"
+            echo "[ERROR] GCP_SA_KEY secret not configured"
             exit 1
           fi
           
           if [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then
-            echo "❌ GEMINI_API_KEY secret not configured"
+            echo "[ERROR] GEMINI_API_KEY secret not configured"
             exit 1
           fi
           
-          echo "✅ All secrets configured"
-          echo "✅ Pre-deployment validation passed"
+          echo "[OK] All secrets configured"
+          echo "[OK] Pre-deployment validation passed"
       
-      - name: 📊 Create Deployment Summary
+      - name: Create Deployment Summary
         run: |
-          echo "# 🚀 Deployment Information" >> $GITHUB_STEP_SUMMARY
+          echo "# Deployment Information" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** ${{ steps.env.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
@@ -110,10 +110,10 @@ jobs:
     if: github.event.inputs.skip_tests != 'true'
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: 🐍 Setup Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -124,12 +124,12 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
       
-      - name: 🧪 Run Quick Tests
+      - name: Run Quick Tests
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           pytest tests/ -v -m "not slow" --maxfail=5
-          echo "✅ Tests passed"
+          echo "[OK] Tests passed"
 
   # ═══════════════════════════════════════════════════════════════════════
   # Job 3: Build & Push Docker Image
@@ -144,7 +144,7 @@ jobs:
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
       
       - name: 🔐 Authenticate to Google Cloud
@@ -157,15 +157,15 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
       
-      - name: 🐳 Configure Docker for GCR
+      - name: Configure Docker for GCR
         run: |
           gcloud auth configure-docker
-          echo "✅ Docker configured for GCR"
+          echo "[OK] Docker configured for GCR"
       
       - name: 🏗️ Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      - name: 💾 Cache Docker Layers
+      - name: Cache Docker Layers
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
@@ -173,7 +173,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
       
-      - name: 🔨 Build Docker Image
+      - name: Build Docker Image
         env:
           VERSION: ${{ needs.validate.outputs.version }}
         run: |
@@ -192,11 +192,11 @@ jobs:
             --load \
             .
           
-          echo "✅ Docker image built"
+          echo "[OK] Docker image built"
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
           echo "IMAGE_LATEST=$IMAGE_LATEST" >> $GITHUB_ENV
       
-      - name: 🔍 Scan Image for Vulnerabilities
+      - name: Scan Image for Vulnerabilities
         continue-on-error: true
         run: |
           docker run --rm \
@@ -206,16 +206,16 @@ jobs:
             --exit-code 0 \
             ${{ env.IMAGE_TAG }}
       
-      - name: 📤 Push to Container Registry
+      - name: Push to Container Registry
         run: |
           docker push ${{ env.IMAGE_TAG }}
           docker push ${{ env.IMAGE_LATEST }}
           
-          echo "✅ Images pushed to GCR"
+          echo "[OK] Images pushed to GCR"
           echo "  📦 ${{ env.IMAGE_TAG }}"
           echo "  📦 ${{ env.IMAGE_LATEST }}"
       
-      - name: 🔄 Move Cache
+      - name: Move Cache
         run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
@@ -235,7 +235,7 @@ jobs:
       service-url: ${{ steps.deploy.outputs.url }}
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
       
       - name: 🔐 Authenticate to Google Cloud
@@ -246,7 +246,7 @@ jobs:
       - name: ☁️ Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
       
-      - name: 🚀 Deploy to Cloud Run
+      - name: Deploy to Cloud Run
         id: deploy
         env:
           VERSION: ${{ needs.validate.outputs.version }}
@@ -278,7 +278,7 @@ jobs:
             --format 'value(status.url)')
           
           echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
-          echo "✅ Deployment successful!"
+          echo "Deployment successful!"
           echo "🌐 Service URL: $SERVICE_URL"
       
       - name: 🏷️ Tag Revision
@@ -294,9 +294,9 @@ jobs:
             --to-latest \
             --quiet
           
-          echo "✅ Traffic routed to revision: $REVISION"
+          echo "[OK] Traffic routed to revision: $REVISION"
       
-      - name: 📊 Get Service Info
+      - name: Get Service Info
         run: |
           gcloud run services describe ${{ env.SERVICE_NAME }} \
             --region ${{ env.REGION }} \
@@ -315,7 +315,7 @@ jobs:
     needs: deploy
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
       
       - name: ⏳ Wait for Service Startup
@@ -323,7 +323,7 @@ jobs:
           echo "Waiting 30s for service to be fully ready..."
           sleep 30
       
-      - name: 🧪 Health Check
+      - name: Health Check
         run: |
           SERVICE_URL="${{ needs.deploy.outputs.service-url }}"
           MAX_RETRIES=5
@@ -333,7 +333,7 @@ jobs:
           
           for i in $(seq 1 $MAX_RETRIES); do
             if curl -f -s "$SERVICE_URL/health" > /dev/null; then
-              echo "✅ Health check passed (attempt $i)"
+              echo "[OK] Health check passed (attempt $i)"
               exit 0
             else
               echo "⏳ Health check failed, retrying in ${RETRY_DELAY}s... ($i/$MAX_RETRIES)"
@@ -341,10 +341,10 @@ jobs:
             fi
           done
           
-          echo "❌ Health check failed after $MAX_RETRIES attempts"
+          echo "[ERROR] Health check failed after $MAX_RETRIES attempts"
           exit 1
       
-      - name: 🧪 Smoke Tests
+      - name: Smoke Tests
         run: |
           SERVICE_URL="${{ needs.deploy.outputs.service-url }}"
           
@@ -367,9 +367,9 @@ jobs:
             -f -s | head -c 200
           
           echo ""
-          echo "✅ All smoke tests passed"
+          echo "[OK] All smoke tests passed"
       
-      - name: ⚡ Performance Check
+      - name: Performance Check
         continue-on-error: true
         run: |
           SERVICE_URL="${{ needs.deploy.outputs.service-url }}"
@@ -387,12 +387,12 @@ jobs:
           echo "⏱️ Total response time: ${DURATION}s"
           
           if [ $DURATION -lt 60 ]; then
-            echo "✅ Performance check passed"
+            echo "[OK] Performance check passed"
           else
-            echo "⚠️ Response time exceeded 60s"
+            echo "[WARNING] Response time exceeded 60s"
           fi
       
-      - name: 📊 Get Metrics
+      - name: Get Metrics
         run: |
           SERVICE_URL="${{ needs.deploy.outputs.service-url }}"
           
@@ -409,9 +409,9 @@ jobs:
     if: always()
     
     steps:
-      - name: 📊 Create Deployment Summary
+      - name: Create Deployment Summary
         run: |
-          echo "# 🚀 Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "# Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Deployment Details" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -429,16 +429,16 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.verify.result }}" == "success" ]; then
-            echo "## ✅ Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+            echo "## Deployment Successful!" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "All tests passed. Service is live and healthy. 🎉" >> $GITHUB_STEP_SUMMARY
+            echo "All tests passed. Service is live and healthy." >> $GITHUB_STEP_SUMMARY
           else
-            echo "## ⚠️ Deployment Issues" >> $GITHUB_STEP_SUMMARY
+            echo "## Deployment Issues" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Deployment completed but verification had issues. Please check logs." >> $GITHUB_STEP_SUMMARY
           fi
       
-      - name: 💬 Create Release (if tagged)
+      - name: Create Release (if tagged)
         if: startsWith(github.ref, 'refs/tags/')
         uses: actions/github-script@v7
         with:
@@ -451,7 +451,7 @@ jobs:
               repo: context.repo.repo,
               tag_name: tag,
               name: `Release ${tag}`,
-              body: `## 🚀 Deployed to Production\n\n**Service URL:** ${deployUrl}\n\n**Changes:** See commit history`,
+              body: `## Deployed to Production\n\n**Service URL:** ${deployUrl}\n\n**Changes:** See commit history`,
               draft: false,
               prerelease: false
             });
