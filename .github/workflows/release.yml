@@ -45,7 +45,7 @@ jobs:
       changelog: ${{ steps.changelog.outputs.changelog }}
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Need full history for changelog
@@ -75,22 +75,22 @@ jobs:
           
           echo "📦 Version: $VERSION"
           echo "🔢 Version Number: $VERSION_NUMBER"
-          echo "🎯 Pre-release: $IS_PRERELEASE"
+          echo "Pre-release: $IS_PRERELEASE"
       
-      - name: ✅ Validate Semantic Version
+      - name: Validate Semantic Version
         run: |
           VERSION="${{ steps.version.outputs.version-number }}"
           
           # Validate semantic versioning format
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-            echo "❌ Invalid version format: $VERSION"
+            echo "[ERROR] Invalid version format: $VERSION"
             echo "Expected format: X.Y.Z or X.Y.Z-prerelease"
             exit 1
           fi
           
-          echo "✅ Version format valid"
+          echo "[OK] Version format valid"
       
-      - name: 📝 Generate Changelog
+      - name: Generate Changelog
         id: changelog
         run: |
           # Get previous tag
@@ -118,9 +118,9 @@ jobs:
             echo 'EOF'
           } >> $GITHUB_OUTPUT
           
-          echo "✅ Changelog generated"
+          echo "[OK] Changelog generated"
       
-      - name: 📤 Upload Changelog
+      - name: Upload Changelog
         uses: actions/upload-artifact@v4
         with:
           name: changelog
@@ -136,10 +136,10 @@ jobs:
     needs: validate
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: 🐍 Setup Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -150,7 +150,7 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
       
-      - name: 🧪 Run Full Test Suite
+      - name: Run Full Test Suite
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -161,9 +161,9 @@ jobs:
             --cov-report=term \
             --junit-xml=test-results.xml
           
-          echo "✅ All tests passed"
+          echo "[OK] All tests passed"
       
-      - name: 📤 Upload Test Results
+      - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -185,10 +185,10 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: 🐍 Setup Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -198,12 +198,12 @@ jobs:
           pip install --upgrade pip setuptools wheel build
           pip install -r requirements.txt
       
-      - name: 🔨 Build Distribution
+      - name: Build Distribution
         run: |
           python -m build
-          echo "✅ Distribution built"
+          echo "[OK] Distribution built"
       
-      - name: 📝 Create Source Archive
+      - name: Create Source Archive
         if: matrix.os == 'ubuntu-latest'
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
@@ -216,9 +216,9 @@ jobs:
             --exclude='*.egg-info' \
             .
           
-          echo "✅ Source archive created"
+          echo "[OK] Source archive created"
       
-      - name: 📊 Generate Documentation
+      - name: Generate Documentation
         if: matrix.os == 'ubuntu-latest'
         run: |
           # Install documentation tools
@@ -228,14 +228,14 @@ jobs:
           if [ -f "mkdocs.yml" ]; then
             mkdocs build
             tar -czf documentation.tar.gz site/
-            echo "✅ Documentation built"
+            echo "[OK] Documentation built"
           else
             # Create simple documentation archive
             tar -czf documentation.tar.gz docs/ README.md
-            echo "✅ Documentation archive created"
+            echo "[OK] Documentation archive created"
           fi
       
-      - name: 📤 Upload Build Artifacts
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist-${{ matrix.os }}
@@ -254,13 +254,13 @@ jobs:
     needs: [validate, test]
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: 🐳 Set up Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      - name: 🔨 Build Docker Image
+      - name: Build Docker Image
         env:
           VERSION: ${{ needs.validate.outputs.version }}
         run: |
@@ -277,9 +277,9 @@ jobs:
           # Compress
           gzip /tmp/qearis-$VERSION.tar
           
-          echo "✅ Docker image built"
+          echo "[OK] Docker image built"
       
-      - name: 📤 Upload Docker Image
+      - name: Upload Docker Image
         uses: actions/upload-artifact@v4
         with:
           name: docker-image
@@ -298,17 +298,17 @@ jobs:
       release-body: ${{ steps.notes.outputs.release-body }}
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
-      - name: 📥 Download Changelog
+      - name: Download Changelog
         uses: actions/download-artifact@v4
         with:
           name: changelog
       
-      - name: 📝 Generate Release Notes
+      - name: Generate Release Notes
         id: notes
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
@@ -329,23 +329,23 @@ jobs:
           EOF
           
           if [ "$IS_PRERELEASE" = "true" ]; then
-            echo "⚠️ **This is a pre-release version**" >> release-notes.md
+            echo "[WARNING] **This is a pre-release version**" >> release-notes.md
             echo "" >> release-notes.md
           fi
           
           cat >> release-notes.md << EOF
-          ## 📊 Release Statistics
+          ## Release Statistics
           
           - **Features:** $FEATURES
           - **Bug Fixes:** $FIXES
           - **Documentation:** $DOCS
           - **Total Changes:** $(echo "$CHANGELOG" | wc -l)
           
-          ## 🎯 Highlights
+          ## Highlights
           
           <!-- Add manual highlights here -->
           
-          ## 📋 Changes
+          ## Changes
           
           EOF
           
@@ -358,17 +358,17 @@ jobs:
           echo "$CHANGELOG" | grep -i "fix:" || echo "No bug fixes" >> release-notes.md
           echo "" >> release-notes.md
           
-          echo "### 📚 Documentation" >> release-notes.md
+          echo "### Documentation" >> release-notes.md
           echo "$CHANGELOG" | grep -i "docs:" || echo "No documentation changes" >> release-notes.md
           echo "" >> release-notes.md
           
-          echo "### 🔧 Other Changes" >> release-notes.md
+          echo "### Other Changes" >> release-notes.md
           echo "$CHANGELOG" | grep -v -i "feat:\|fix:\|docs:" || echo "No other changes" >> release-notes.md
           echo "" >> release-notes.md
           
           cat >> release-notes.md << 'EOF'
           
-          ## 🚀 Deployment
+          ## Deployment
           
           ### Docker
 ```bash
@@ -401,7 +401,7 @@ jobs:
           - **Issues:** https://github.com/aabhimittal/QEARIS/issues
           - **Discussions:** https://github.com/aabhimittal/QEARIS/discussions
           
-          ## 💬 Feedback
+          ## Feedback
           
           Found a bug or have a suggestion? Please open an issue!
           
@@ -421,9 +421,9 @@ jobs:
             echo 'EOF'
           } >> $GITHUB_OUTPUT
           
-          echo "✅ Release notes generated"
+          echo "[OK] Release notes generated"
       
-      - name: 📤 Upload Release Notes
+      - name: Upload Release Notes
         uses: actions/upload-artifact@v4
         with:
           name: release-notes
@@ -442,10 +442,10 @@ jobs:
       discussions: write
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: 📥 Download All Artifacts
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
@@ -475,9 +475,9 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           cd ..
           
-          echo "✅ Release assets organized"
+          echo "[OK] Release assets organized"
       
-      - name: 📝 Load Release Notes
+      - name: Load Release Notes
         id: notes
         run: |
           NOTES=$(cat artifacts/release-notes/release-notes.md)
@@ -487,7 +487,7 @@ jobs:
             echo 'EOF'
           } >> $GITHUB_OUTPUT
       
-      - name: 🚀 Create Release
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.validate.outputs.version }}
@@ -502,9 +502,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: 📊 Release Summary
+      - name: Release Summary
         run: |
-          echo "# 🎉 Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "# Release Created" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Release Information" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -520,10 +520,10 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "1. ✅ Release created on GitHub" >> $GITHUB_STEP_SUMMARY
+          echo "1. [OK] Release created on GitHub" >> $GITHUB_STEP_SUMMARY
           echo "2. 📢 Announce in discussions" >> $GITHUB_STEP_SUMMARY
-          echo "3. 📝 Update documentation" >> $GITHUB_STEP_SUMMARY
-          echo "4. 🚀 Deploy to production" >> $GITHUB_STEP_SUMMARY
+          echo "3. Update documentation" >> $GITHUB_STEP_SUMMARY
+          echo "4. Deploy to production" >> $GITHUB_STEP_SUMMARY
 
   # ═══════════════════════════════════════════════════════════════════════
   # Job 7: Publish to PyPI (Optional)
@@ -539,10 +539,10 @@ jobs:
       url: https://pypi.org/project/qearis
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: 🐍 Setup Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -551,24 +551,24 @@ jobs:
         run: |
           pip install --upgrade pip build twine
       
-      - name: 🔨 Build Package
+      - name: Build Package
         run: |
           python -m build
-          echo "✅ Package built"
+          echo "[OK] Package built"
       
-      - name: ✅ Check Package
+      - name: Check Package
         run: |
           twine check dist/*
-          echo "✅ Package validated"
+          echo "[OK] Package validated"
       
-      - name: 📤 Publish to PyPI
+      - name: Publish to PyPI
         continue-on-error: true
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           twine upload dist/*
-          echo "✅ Published to PyPI"
+          echo "[OK] Published to PyPI"
 
   # ═══════════════════════════════════════════════════════════════════════
   # Job 8: Update Documentation
@@ -579,12 +579,12 @@ jobs:
     needs: [validate, create-release]
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           ref: main
       
-      - name: 📝 Update Version in Files
+      - name: Update Version in Files
         run: |
           VERSION="${{ needs.validate.outputs.version-number }}"
           
@@ -603,9 +603,9 @@ jobs:
             sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/g" src/__init__.py
           fi
           
-          echo "✅ Version updated in files"
+          echo "[OK] Version updated in files"
       
-      - name: 📝 Update Changelog
+      - name: Update Changelog
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           DATE=$(date +%Y-%m-%d)
@@ -619,9 +619,9 @@ jobs:
           # Add new version entry
           sed -i "3i## [$VERSION] - $DATE\n\n${{ needs.validate.outputs.changelog }}\n" CHANGELOG.md
           
-          echo "✅ Changelog updated"
+          echo "[OK] Changelog updated"
       
-      - name: 💾 Commit Changes
+      - name: Commit Changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -633,7 +633,7 @@ jobs:
           else
             git commit -m "chore: bump version to ${{ needs.validate.outputs.version }}"
             git push
-            echo "✅ Version bump committed"
+            echo "[OK] Version bump committed"
           fi
 
   # ═══════════════════════════════════════════════════════════════════════
@@ -646,9 +646,9 @@ jobs:
     if: always()
     
     steps:
-      - name: 📊 Create Release Summary
+      - name: Create Release Summary
         run: |
-          echo "# 🎉 Release Workflow Complete" >> $GITHUB_STEP_SUMMARY
+          echo "# Release Workflow Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Release Details" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -663,7 +663,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.create-release.result }}" == "success" ]; then
-            echo "✅ **Release created successfully!**" >> $GITHUB_STEP_SUMMARY
+            echo "[OK] **Release created successfully!**" >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ **Release creation failed. Check logs for details.**" >> $GITHUB_STEP_SUMMARY
+            echo "[ERROR] **Release creation failed. Check logs for details.**" >> $GITHUB_STEP_SUMMARY
           fi

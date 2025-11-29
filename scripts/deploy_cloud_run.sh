@@ -18,7 +18,7 @@ SERVICE_NAME="qearis"
 REGION="us-central1"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 
-echo -e "${GREEN}🚀 QEARIS Cloud Run Deployment${NC}"
+echo -e "${GREEN}[START] QEARIS Cloud Run Deployment${NC}"
 echo "=================================="
 
 # Check if gcloud is installed
@@ -93,7 +93,7 @@ SERVICE_URL=$(gcloud run services describe ${SERVICE_NAME} \
     --format 'value(status.url)')
 
 echo ""
-echo -e "${GREEN}✅ Deployment Complete!${NC}"
+echo -e "${GREEN}[OK] Deployment Complete!${NC}"
 echo "=================================="
 echo -e "Service URL: ${GREEN}${SERVICE_URL}${NC}"
 echo ""
@@ -111,11 +111,11 @@ echo ""
 # Test health endpoint
 echo -e "${GREEN}Testing health endpoint...${NC}"
 if curl -f ${SERVICE_URL}/health > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ Health check passed${NC}"
+    echo -e "${GREEN}[OK] Health check passed${NC}"
 else
-    echo -e "${RED}❌ Health check failed${NC}"
+    echo -e "${RED}[ERROR] Health check failed${NC}"
     exit 1
 fi
 
 echo ""
-echo -e "${GREEN}🎉 Deployment successful!${NC}"
+echo -e "${GREEN}[SUCCESS] Deployment successful!${NC}"

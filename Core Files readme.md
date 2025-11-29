@@ -1,4 +1,4 @@
-# 🔬 QEARIS - Quantum-Enhanced Adaptive Research Intelligence System
+# QEARIS - Quantum-Enhanced Adaptive Research Intelligence System
 
 [![CI/CD](https://github.com/yourusername/qearis/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/qearis/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -7,23 +7,23 @@
 
 > A sophisticated multi-agent research system combining quantum-inspired optimization, RAG, MCP, and advanced agent coordination for autonomous research workflows.
 
-## 🎯 Competition Submission
+## Competition Submission
 
 **Kaggle Capstone Project - Google AI Competition**
 
 This project demonstrates **all required key concepts**:
 
-- ✅ **Multi-Agent System**: Parallel, Sequential, and Loop agents
-- ✅ **Tools**: MCP, Custom tools, Google Search integration
-- ✅ **Sessions & Memory**: State management, Long-term memory bank
-- ✅ **Context Engineering**: Intelligent context compaction
-- ✅ **Observability**: Logging, Tracing, Metrics
-- ✅ **Agent Evaluation**: Comprehensive performance assessment
-- ✅ **A2A Protocol**: Agent-to-agent communication
-- ✅ **Agent Deployment**: Cloud Run deployment (bonus)
-- ✅ **Gemini API Integration**: Using Google's latest models (bonus)
+- [OK] **Multi-Agent System**: Parallel, Sequential, and Loop agents
+- [OK] **Tools**: MCP, Custom tools, Google Search integration
+- [OK] **Sessions & Memory**: State management, Long-term memory bank
+- [OK] **Context Engineering**: Intelligent context compaction
+- [OK] **Observability**: Logging, Tracing, Metrics
+- [OK] **Agent Evaluation**: Comprehensive performance assessment
+- [OK] **A2A Protocol**: Agent-to-agent communication
+- [OK] **Agent Deployment**: Cloud Run deployment (bonus)
+- [OK] **Gemini API Integration**: Using Google's latest models (bonus)
 
-## 🏆 Key Features
+## Key Features
 
 ### 1. Quantum-Inspired Optimization
 - **Simulated annealing** for optimal task allocation

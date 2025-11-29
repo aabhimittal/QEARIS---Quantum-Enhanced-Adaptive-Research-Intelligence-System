@@ -6,7 +6,7 @@
 
 set -e
 
-echo "🚀 QEARIS Setup"
+echo "[START] QEARIS Setup"
 echo "================"
 
 # Check Python version
@@ -15,11 +15,11 @@ python_version=$(python3 --version 2>&1 | awk '{print $2}')
 required_version="3.10"
 
 if [ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1)" != "$required_version" ]; then
-    echo "❌ Python 3.10+ required. Found: $python_version"
+    echo "[ERROR] Python 3.10+ required. Found: $python_version"
     exit 1
 fi
 
-echo "✅ Python version: $python_version"
+echo "[OK] Python version: $python_version"
 
 # Create virtual environment
 echo "Creating virtual environment..."
@@ -42,7 +42,7 @@ pip install -r requirements-dev.txt
 if [ ! -f .env ]; then
     echo "Creating .env file..."
     cp .env.example .env
-    echo "⚠️  Please edit .env with your configuration"
+    echo "[WARNING] Please edit .env with your configuration"
 fi
 
 # Create necessary directories
@@ -54,7 +54,7 @@ echo "Running tests..."
 pytest tests/ -v
 
 echo ""
-echo "✅ Setup complete!"
+echo "[OK] Setup complete!"
 echo ""
 echo "Next steps:"
 echo "1. Edit .env with your API keys"

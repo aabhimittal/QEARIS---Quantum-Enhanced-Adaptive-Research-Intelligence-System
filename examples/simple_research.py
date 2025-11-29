@@ -55,9 +55,9 @@ async def main():
     try:
         genai.configure(api_key=settings.GEMINI_API_KEY)
         model = genai.GenerativeModel(settings.GEMINI_MODEL)
-        print(f"  ✓ Gemini model: {settings.GEMINI_MODEL}")
+        print(f"  [OK] Gemini model: {settings.GEMINI_MODEL}")
     except Exception as e:
-        print(f"  ✗ Failed to initialize Gemini: {e}")
+        print(f"  [ERROR] Failed to initialize Gemini: {e}")
         print("  Make sure GEMINI_API_KEY is set in your environment")
         return
     
@@ -69,7 +69,7 @@ async def main():
     from src.orchestrator.multi_agent_orchestrator import MultiAgentOrchestrator
     
     orchestrator = MultiAgentOrchestrator(model)
-    print("  ✓ Multi-Agent Orchestrator initialized")
+    print("  [OK] Multi-Agent Orchestrator initialized")
     
     # ========================================================================
     # Step 3: Define research query
@@ -134,7 +134,7 @@ async def main():
         print("=" * 60)
         
     except Exception as e:
-        print(f"  ✗ Research failed: {e}")
+        print(f"  [ERROR] Research failed: {e}")
         import traceback
         traceback.print_exc()
 

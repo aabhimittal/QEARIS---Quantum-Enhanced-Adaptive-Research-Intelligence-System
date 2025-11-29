@@ -83,9 +83,9 @@ async def demonstrate_parallel_execution(orchestrator, gemini_model):
     # For demo, we'll just show the pattern
     print("  Pattern: results = await asyncio.gather(*[agent.execute_task(task) for agent, task in zip(agents, tasks)])")
     print()
-    print("  ✓ All agents would execute simultaneously")
-    print("  ✓ Results aggregated after all complete")
-    print("  ✓ Total time = max(individual times), not sum")
+    print("  [OK] All agents would execute simultaneously")
+    print("  [OK] Results aggregated after all complete")
+    print("  [OK] Total time = max(individual times), not sum")
 
 
 async def demonstrate_sequential_validation(gemini_model):
@@ -123,10 +123,10 @@ async def demonstrate_sequential_validation(gemini_model):
     # Note: In a full run, this would validate actual results
     print("  Pattern: for result in results: validation = await validator.execute_task(result)")
     print()
-    print("  ✓ Each result validated against quality criteria")
-    print("  ✓ Source credibility (40%)")
-    print("  ✓ Content quality (30%)")
-    print("  ✓ Confidence alignment (30%)")
+    print("  [OK] Each result validated against quality criteria")
+    print("  [OK] Source credibility (40%)")
+    print("  [OK] Content quality (30%)")
+    print("  [OK] Confidence alignment (30%)")
 
 
 async def demonstrate_loop_synthesis(gemini_model):
@@ -171,10 +171,10 @@ async def demonstrate_loop_synthesis(gemini_model):
     print("        if quality >= threshold:")
     print("            break  # Early termination")
     print()
-    print("  ✓ Iteration 1: Initial synthesis")
-    print("  ✓ Iteration 2: Structure improvement")
-    print("  ✓ Iteration 3: Depth enhancement")
-    print("  ✓ Early stop if quality threshold met")
+    print("  [OK] Iteration 1: Initial synthesis")
+    print("  [OK] Iteration 2: Structure improvement")
+    print("  [OK] Iteration 3: Depth enhancement")
+    print("  [OK] Early stop if quality threshold met")
 
 
 async def demonstrate_quantum_optimization(gemini_model):
@@ -216,9 +216,9 @@ async def demonstrate_quantum_optimization(gemini_model):
     print("  Energy: E(x) = -Σ compatibility × assignment + λ × load_variance")
     print("  Metropolis: P(accept) = exp(-ΔE / T)")
     print()
-    print("  ✓ High temperature: Explore widely")
-    print("  ✓ Low temperature: Settle into minimum")
-    print("  ✓ Typical improvement: 30-40% vs greedy")
+    print("  [OK] High temperature: Explore widely")
+    print("  [OK] Low temperature: Settle into minimum")
+    print("  [OK] Typical improvement: 30-40% vs greedy")
 
 
 async def demonstrate_session_management():
@@ -389,15 +389,15 @@ async def main():
     try:
         genai.configure(api_key=settings.GEMINI_API_KEY)
         gemini_model = genai.GenerativeModel(settings.GEMINI_MODEL)
-        print(f"  ✓ Gemini model: {settings.GEMINI_MODEL}")
+        print(f"  [OK] Gemini model: {settings.GEMINI_MODEL}")
     except Exception as e:
-        print(f"  ✗ Failed: {e}")
+        print(f"  [ERROR] Failed: {e}")
         return
     
     # Import orchestrator
     from src.orchestrator.multi_agent_orchestrator import MultiAgentOrchestrator
     orchestrator = MultiAgentOrchestrator(gemini_model)
-    print("  ✓ Orchestrator initialized")
+    print("  [OK] Orchestrator initialized")
     
     # Run demonstrations
     await demonstrate_parallel_execution(orchestrator, gemini_model)
@@ -414,13 +414,13 @@ async def main():
     print("=" * 60)
     print()
     print("All multi-agent patterns demonstrated:")
-    print("  ✓ Parallel: asyncio.gather() for concurrent execution")
-    print("  ✓ Sequential: for loop for ordered processing")
-    print("  ✓ Loop: while/for with convergence criteria")
-    print("  ✓ Quantum: Simulated annealing optimization")
-    print("  ✓ Sessions: State management and persistence")
-    print("  ✓ Pause/Resume: Checkpoint-based recovery")
-    print("  ✓ A2A: Inter-agent communication")
+    print("  [OK] Parallel: asyncio.gather() for concurrent execution")
+    print("  [OK] Sequential: for loop for ordered processing")
+    print("  [OK] Loop: while/for with convergence criteria")
+    print("  [OK] Quantum: Simulated annealing optimization")
+    print("  [OK] Sessions: State management and persistence")
+    print("  [OK] Pause/Resume: Checkpoint-based recovery")
+    print("  [OK] A2A: Inter-agent communication")
     print()
     print("=" * 60)
     print("Advanced workflow complete!")

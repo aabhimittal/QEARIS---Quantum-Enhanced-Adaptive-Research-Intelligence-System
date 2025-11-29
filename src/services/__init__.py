@@ -16,19 +16,11 @@
 # ============================================================================
 """
 
-from src.services.session_service import (
-    InMemorySessionService,
-    SessionState,
-    SessionConfig,
-    create_session_service
-)
-
-from src.services.task_manager import (
-    TaskManager,
-    TaskState,
-    ManagedTask,
-    create_task_manager
-)
+from src.services.session_service import (InMemorySessionService,
+                                          SessionConfig, SessionState,
+                                          create_session_service)
+from src.services.task_manager import (ManagedTask, TaskManager, TaskState,
+                                       create_task_manager)
 
 __all__ = [
     # Session Service
@@ -36,7 +28,6 @@ __all__ = [
     "SessionState",
     "SessionConfig",
     "create_session_service",
-    
     # Task Manager
     "TaskManager",
     "TaskState",

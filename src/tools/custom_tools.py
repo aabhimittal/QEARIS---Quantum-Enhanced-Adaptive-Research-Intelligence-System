@@ -26,9 +26,9 @@
 import asyncio
 import logging
 import re
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
-from dataclasses import dataclass, field
 
 # ============================================================================
 # CAPSTONE REQUIREMENT: Observability - Logging
@@ -40,17 +40,18 @@ logger = logging.getLogger(__name__)
 class ToolDefinition:
     """
     Definition for a custom tool.
-    
+
     CAPSTONE REQUIREMENT: Tools Integration
     Standard structure for tool registration with MCP server.
     """
+
     name: str
     description: str
     handler: Callable
     parameters: Dict[str, Any] = field(default_factory=dict)
     enabled: bool = True
     category: str = "custom"
-    
+
     # Metrics
     invocation_count: int = 0
     success_count: int = 0
@@ -60,41 +61,41 @@ class ToolDefinition:
 class CustomToolRegistry:
     """
     Registry for custom research tools.
-    
+
     ============================================================================
     CAPSTONE REQUIREMENT: Custom Tools
     POINTS: Technical Implementation - 20 points
-    
+
     DESCRIPTION:
     Central registry for managing custom tools. Provides:
     - Tool registration and discovery
     - Parameter validation
     - Execution metrics tracking
     - Integration with MCP server
-    
+
     DESIGN PATTERN:
     Registry pattern for centralized tool management.
     ============================================================================
     """
-    
+
     def __init__(self):
         """Initialize empty tool registry."""
         self.tools: Dict[str, ToolDefinition] = {}
         logger.info("Custom Tool Registry initialized")
-    
+
     def register(
         self,
         name: str,
         description: str,
         handler: Callable,
         parameters: Optional[Dict[str, Any]] = None,
-        category: str = "custom"
+        category: str = "custom",
     ) -> bool:
         """
         Register a custom tool.
-        
+
         CAPSTONE REQUIREMENT: Custom Tools
-        
+
         PARAMETERS:
         -----------
         name : str
@@ -107,63 +108,59 @@ class CustomToolRegistry:
             JSON Schema for parameters
         category : str
             Tool category for organization
-        
+
         RETURNS:
         --------
         bool : True if registered successfully
         """
         if name in self.tools:
             logger.warning(f"Tool '{name}' already registered, updating")
-        
+
         tool = ToolDefinition(
             name=name,
             description=description,
             handler=handler,
             parameters=parameters or {},
-            category=category
+            category=category,
         )
-        
+
         self.tools[name] = tool
         logger.info(f"Registered custom tool: {name} ({category})")
-        
+
         return True
-    
-    async def execute(
-        self,
-        name: str,
-        parameters: Dict[str, Any]
-    ) -> Dict[str, Any]:
+
+    async def execute(self, name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a registered tool.
-        
+
         CAPSTONE REQUIREMENT: Tools Integration
         """
         if name not in self.tools:
             return {"error": f"Tool '{name}' not found"}
-        
+
         tool = self.tools[name]
-        
+
         if not tool.enabled:
             return {"error": f"Tool '{name}' is disabled"}
-        
+
         start_time = datetime.now()
-        
+
         try:
             # Execute handler
             result = await tool.handler(**parameters)
-            
+
             # Update metrics
             tool.invocation_count += 1
             tool.success_count += 1
             tool.total_execution_time += (datetime.now() - start_time).total_seconds()
-            
+
             return result
-            
+
         except Exception as e:
             tool.invocation_count += 1
             logger.error(f"Tool '{name}' execution failed: {e}")
             return {"error": str(e)}
-    
+
     def list_tools(self) -> List[Dict[str, Any]]:
         """List all registered tools."""
         return [
@@ -172,11 +169,11 @@ class CustomToolRegistry:
                 "description": tool.description,
                 "parameters": tool.parameters,
                 "category": tool.category,
-                "enabled": tool.enabled
+                "enabled": tool.enabled,
             }
             for tool in self.tools.values()
         ]
-    
+
     def get_metrics(self) -> Dict[str, Any]:
         """Get tool execution metrics."""
         return {
@@ -184,7 +181,7 @@ class CustomToolRegistry:
                 "invocations": tool.invocation_count,
                 "successes": tool.success_count,
                 "success_rate": tool.success_count / max(tool.invocation_count, 1),
-                "avg_time": tool.total_execution_time / max(tool.invocation_count, 1)
+                "avg_time": tool.total_execution_time / max(tool.invocation_count, 1),
             }
             for name, tool in self.tools.items()
         }
@@ -194,38 +191,36 @@ class CustomToolRegistry:
 # CUSTOM TOOL IMPLEMENTATIONS
 # ============================================================================
 
-async def web_search_tool(
-    query: str,
-    max_results: int = 5
-) -> Dict[str, Any]:
+
+async def web_search_tool(query: str, max_results: int = 5) -> Dict[str, Any]:
     """
     Web search tool for retrieving current information.
-    
+
     ============================================================================
     CAPSTONE REQUIREMENT: Custom Tools
     POINTS: Technical Implementation - 20 points
-    
+
     DESCRIPTION:
     Simulates web search functionality for research tasks.
     In production, would integrate with:
     - Google Custom Search API
     - Bing Search API
     - DuckDuckGo API
-    
+
     PARAMETERS:
     -----------
     query : str
         Search query string
     max_results : int
         Maximum results to return
-    
+
     RETURNS:
     --------
     Dict with search results including title, snippet, url
     ============================================================================
     """
     logger.debug(f"Web search: '{query}' (max: {max_results})")
-    
+
     # Simulated search results for demo
     # In production, would call actual search API
     simulated_results = [
@@ -233,47 +228,45 @@ async def web_search_tool(
             "title": f"Research on {query} - Scientific Overview",
             "snippet": f"Comprehensive analysis of {query} including latest findings and developments in the field.",
             "url": f"https://example.com/research/{query.replace(' ', '-')}",
-            "relevance": 0.95
+            "relevance": 0.95,
         },
         {
             "title": f"{query}: A Technical Deep Dive",
             "snippet": f"Technical exploration of {query} covering architecture, implementation, and best practices.",
             "url": f"https://techjournal.com/{query.replace(' ', '-')}",
-            "relevance": 0.88
+            "relevance": 0.88,
         },
         {
             "title": f"Recent Advances in {query}",
             "snippet": f"Latest developments and breakthroughs in {query} from leading researchers.",
             "url": f"https://advances.science/{query.replace(' ', '-')}",
-            "relevance": 0.82
-        }
+            "relevance": 0.82,
+        },
     ]
-    
+
     return {
         "query": query,
         "results": simulated_results[:max_results],
         "total_results": len(simulated_results),
-        "search_time": 0.5
+        "search_time": 0.5,
     }
 
 
 async def arxiv_search_tool(
-    query: str,
-    max_results: int = 5,
-    categories: Optional[List[str]] = None
+    query: str, max_results: int = 5, categories: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
     ArXiv paper search tool.
-    
+
     ============================================================================
     CAPSTONE REQUIREMENT: Custom Tools
-    
+
     DESCRIPTION:
     Search academic papers on arXiv. Useful for:
     - Literature review
     - Finding related work
     - Academic citations
-    
+
     PARAMETERS:
     -----------
     query : str
@@ -285,7 +278,7 @@ async def arxiv_search_tool(
     ============================================================================
     """
     logger.debug(f"ArXiv search: '{query}'")
-    
+
     # Simulated arXiv results
     papers = [
         {
@@ -295,7 +288,7 @@ async def arxiv_search_tool(
             "abstract": f"We present a novel method for {query} that achieves state-of-the-art results...",
             "categories": categories or ["cs.AI"],
             "published": "2024-01-15",
-            "pdf_url": f"https://arxiv.org/pdf/2401.12345"
+            "pdf_url": f"https://arxiv.org/pdf/2401.12345",
         },
         {
             "arxiv_id": "2312.98765",
@@ -304,36 +297,34 @@ async def arxiv_search_tool(
             "abstract": f"This survey covers recent advances in {query}, including methodology and applications...",
             "categories": categories or ["cs.AI"],
             "published": "2023-12-20",
-            "pdf_url": "https://arxiv.org/pdf/2312.98765"
-        }
+            "pdf_url": "https://arxiv.org/pdf/2312.98765",
+        },
     ]
-    
+
     return {
         "query": query,
         "papers": papers[:max_results],
         "total_found": len(papers),
-        "categories": categories
+        "categories": categories,
     }
 
 
 async def patent_search_tool(
-    query: str,
-    max_results: int = 5,
-    jurisdiction: str = "US"
+    query: str, max_results: int = 5, jurisdiction: str = "US"
 ) -> Dict[str, Any]:
     """
     Patent search tool.
-    
+
     ============================================================================
     CAPSTONE REQUIREMENT: Custom Tools
-    
+
     DESCRIPTION:
     Search patent databases for prior art and innovations.
     Useful for:
     - Innovation research
     - Prior art discovery
     - Technology landscape analysis
-    
+
     PARAMETERS:
     -----------
     query : str
@@ -345,7 +336,7 @@ async def patent_search_tool(
     ============================================================================
     """
     logger.debug(f"Patent search: '{query}' ({jurisdiction})")
-    
+
     # Simulated patent results
     patents = [
         {
@@ -356,7 +347,7 @@ async def patent_search_tool(
             "abstract": f"A system for implementing {query} with improved efficiency...",
             "filing_date": "2022-06-15",
             "grant_date": "2024-01-10",
-            "jurisdiction": jurisdiction
+            "jurisdiction": jurisdiction,
         },
         {
             "patent_id": "US10987654B1",
@@ -366,33 +357,29 @@ async def patent_search_tool(
             "abstract": f"An apparatus that enables {query} using novel techniques...",
             "filing_date": "2021-03-20",
             "grant_date": "2023-08-05",
-            "jurisdiction": jurisdiction
-        }
+            "jurisdiction": jurisdiction,
+        },
     ]
-    
+
     return {
         "query": query,
         "patents": patents[:max_results],
         "total_found": len(patents),
-        "jurisdiction": jurisdiction
+        "jurisdiction": jurisdiction,
     }
 
 
-async def knowledge_base_tool(
-    query: str,
-    top_k: int = 5,
-    threshold: float = 0.7
-) -> Dict[str, Any]:
+async def knowledge_base_tool(query: str, top_k: int = 5, threshold: float = 0.7) -> Dict[str, Any]:
     """
     Knowledge base query tool.
-    
+
     ============================================================================
     CAPSTONE REQUIREMENT: Custom Tools
-    
+
     DESCRIPTION:
     Query the internal knowledge base (RAG system).
     This tool provides a standardized interface for RAG retrieval.
-    
+
     PARAMETERS:
     -----------
     query : str
@@ -404,7 +391,7 @@ async def knowledge_base_tool(
     ============================================================================
     """
     logger.debug(f"Knowledge base query: '{query}'")
-    
+
     # This would integrate with actual RAG system
     # For now, return simulated results
     results = [
@@ -412,24 +399,24 @@ async def knowledge_base_tool(
             "content": f"Information about {query} from internal knowledge base.",
             "source": "knowledge_base.txt",
             "similarity": 0.92,
-            "metadata": {"type": "fact", "verified": True}
+            "metadata": {"type": "fact", "verified": True},
         },
         {
             "content": f"Additional context on {query} from research documents.",
             "source": "research_docs.txt",
             "similarity": 0.85,
-            "metadata": {"type": "research", "verified": True}
-        }
+            "metadata": {"type": "research", "verified": True},
+        },
     ]
-    
+
     # Filter by threshold
     filtered = [r for r in results if r["similarity"] >= threshold]
-    
+
     return {
         "query": query,
         "results": filtered[:top_k],
         "total_found": len(filtered),
-        "threshold": threshold
+        "threshold": threshold,
     }
 
 
@@ -437,21 +424,22 @@ async def knowledge_base_tool(
 # TOOL REGISTRATION HELPER
 # ============================================================================
 
+
 async def register_custom_tools(mcp_server: Any) -> int:
     """
     Register all custom tools with MCP server.
-    
+
     ============================================================================
     CAPSTONE REQUIREMENT: Custom Tools
-    
+
     This function registers all custom research tools with the MCP server,
     making them available for agent use.
-    
+
     PARAMETERS:
     -----------
     mcp_server : MCPServer
         MCP server instance for tool registration
-    
+
     RETURNS:
     --------
     int : Number of tools registered
@@ -466,10 +454,10 @@ async def register_custom_tools(mcp_server: Any) -> int:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query"},
-                    "max_results": {"type": "integer", "default": 5, "minimum": 1, "maximum": 20}
+                    "max_results": {"type": "integer", "default": 5, "minimum": 1, "maximum": 20},
                 },
-                "required": ["query"]
-            }
+                "required": ["query"],
+            },
         },
         {
             "name": "arxiv_search",
@@ -480,10 +468,10 @@ async def register_custom_tools(mcp_server: Any) -> int:
                 "properties": {
                     "query": {"type": "string", "description": "Paper search query"},
                     "max_results": {"type": "integer", "default": 5},
-                    "categories": {"type": "array", "items": {"type": "string"}}
+                    "categories": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["query"]
-            }
+                "required": ["query"],
+            },
         },
         {
             "name": "patent_search",
@@ -494,10 +482,10 @@ async def register_custom_tools(mcp_server: Any) -> int:
                 "properties": {
                     "query": {"type": "string", "description": "Patent search query"},
                     "max_results": {"type": "integer", "default": 5},
-                    "jurisdiction": {"type": "string", "default": "US"}
+                    "jurisdiction": {"type": "string", "default": "US"},
                 },
-                "required": ["query"]
-            }
+                "required": ["query"],
+            },
         },
         {
             "name": "knowledge_base",
@@ -508,13 +496,13 @@ async def register_custom_tools(mcp_server: Any) -> int:
                 "properties": {
                     "query": {"type": "string", "description": "Knowledge query"},
                     "top_k": {"type": "integer", "default": 5},
-                    "threshold": {"type": "number", "default": 0.7}
+                    "threshold": {"type": "number", "default": 0.7},
                 },
-                "required": ["query"]
-            }
-        }
+                "required": ["query"],
+            },
+        },
     ]
-    
+
     registered = 0
     for tool in tools:
         try:
@@ -522,12 +510,12 @@ async def register_custom_tools(mcp_server: Any) -> int:
                 name=tool["name"],
                 description=tool["description"],
                 handler=tool["handler"],
-                parameters=tool["parameters"]
+                parameters=tool["parameters"],
             )
             registered += 1
             logger.info(f"Registered custom tool: {tool['name']}")
         except Exception as e:
             logger.error(f"Failed to register {tool['name']}: {e}")
-    
+
     logger.info(f"Registered {registered} custom tools")
     return registered

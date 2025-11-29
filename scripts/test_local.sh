@@ -6,7 +6,7 @@
 
 set -e
 
-echo "🧪 Running QEARIS Tests"
+echo "[TEST] Running QEARIS Tests"
 echo "======================="
 
 # Activate virtual environment
@@ -47,4 +47,4 @@ echo "7. Cleaning up..."
 kill $SERVER_PID
 
 echo ""
-echo "✅ All tests passed!"
+echo "[OK] All tests passed!"
