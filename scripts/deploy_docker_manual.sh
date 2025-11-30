@@ -180,13 +180,11 @@ else
     DOCKERFILE_PATH="dockerfile"
 fi
 
-docker build \
+if docker build \
     -t "${IMAGE_NAME}:${IMAGE_TAG}" \
     -t "${IMAGE_NAME}:latest" \
     -f "${DOCKERFILE_PATH}" \
-    .
-
-if [ $? -eq 0 ]; then
+    .; then
     log_info "Image built successfully: ${IMAGE_NAME}:${IMAGE_TAG}"
 else
     log_error "Docker build failed."
@@ -198,15 +196,17 @@ fi
 # ============================================================================
 log_step "Pushing image to Google Container Registry..."
 
-docker push "${IMAGE_NAME}:${IMAGE_TAG}"
-docker push "${IMAGE_NAME}:latest"
-
-if [ $? -eq 0 ]; then
-    log_info "Image pushed successfully"
-else
-    log_error "Failed to push image to Container Registry."
+if ! docker push "${IMAGE_NAME}:${IMAGE_TAG}"; then
+    log_error "Failed to push image ${IMAGE_NAME}:${IMAGE_TAG} to Container Registry."
     exit 1
 fi
+
+if ! docker push "${IMAGE_NAME}:latest"; then
+    log_error "Failed to push image ${IMAGE_NAME}:latest to Container Registry."
+    exit 1
+fi
+
+log_info "Images pushed successfully"
 
 # ============================================================================
 # Deploy to Cloud Run
@@ -229,7 +229,7 @@ if [ -n "${GEMINI_MODEL}" ]; then
 fi
 
 # Deploy service
-gcloud run deploy "${SERVICE_NAME}" \
+if gcloud run deploy "${SERVICE_NAME}" \
     --image "${IMAGE_NAME}:${IMAGE_TAG}" \
     --platform managed \
     --region "${REGION}" \
@@ -241,9 +241,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --min-instances "${MIN_INSTANCES}" \
     --port 8080 \
     --set-env-vars="${ENV_VARS}" \
-    --quiet
-
-if [ $? -eq 0 ]; then
+    --quiet; then
     log_info "Service deployed successfully"
 else
     log_error "Deployment to Cloud Run failed."

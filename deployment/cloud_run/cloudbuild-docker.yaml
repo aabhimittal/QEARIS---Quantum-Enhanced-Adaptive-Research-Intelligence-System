@@ -41,6 +41,24 @@ substitutions:
 # Build steps
 steps:
   # ============================================================================
+  # Step 0: Validate Required Variables
+  # ============================================================================
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'validate'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "Validating required substitution variables..."
+        if [ -z "${_GEMINI_API_KEY}" ]; then
+          echo "ERROR: _GEMINI_API_KEY substitution variable is required."
+          echo "Usage: gcloud builds submit --config cloudbuild-docker.yaml --substitutions=_GEMINI_API_KEY='your-key'"
+          exit 1
+        fi
+        echo "✓ Required variables validated"
+    waitFor: ['-']  # Start immediately
+
+  # ============================================================================
   # Step 1: Build Docker Image
   # ============================================================================
   - name: 'gcr.io/cloud-builders/docker'
@@ -54,7 +72,7 @@ steps:
       - '-f'
       - 'dockerfile'
       - '.'
-    waitFor: ['-']  # Start immediately
+    waitFor: ['validate']
 
   # ============================================================================
   # Step 2: Push Image with Build ID Tag
