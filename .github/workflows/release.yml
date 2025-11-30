@@ -176,7 +176,7 @@ jobs:
               --cov-report=term \
               --junit-xml=test-results.xml \
               -m "not integration" \
-              --ignore=tests/integration/ || true
+              --ignore=tests/integration/
           else
             pytest tests/ \
               -v \
