@@ -525,6 +525,144 @@ gcloud run services update qearis \
 curl ${SERVICE_URL}/health
 ```
 
+#### 6. Git Repository Link Error
+
+**Error Message:**
+```
+invalid argument: git repository link name must be in the format of
+'projects//locations//connections//gitRepositoryLinks/'
+```
+
+**Cause:**
+This error occurs when Cloud Build tries to connect to a Git repository using 2nd-generation connections (Cloud Build triggers), but the repository link is not properly configured or does not exist.
+
+**Solutions:**
+
+##### Solution 1: Deploy Using Pre-built Docker Image (Recommended)
+
+This approach bypasses the Git repository link issue entirely by building the Docker image locally and pushing it directly to Google Container Registry.
+
+```bash
+# 1. Set your API key
+export GEMINI_API_KEY="your-api-key-here"
+
+# 2. Run the manual deployment script
+chmod +x scripts/deploy_docker_manual.sh
+./scripts/deploy_docker_manual.sh
+```
+
+Or manually:
+
+```bash
+# 1. Authenticate to Google Cloud
+gcloud auth login
+gcloud config set project gen-lang-client-0472751146
+
+# 2. Configure Docker for GCR
+gcloud auth configure-docker
+
+# 3. Build and tag the image
+docker build -t gcr.io/gen-lang-client-0472751146/gemini-api-service:latest .
+
+# 4. Push to Container Registry
+docker push gcr.io/gen-lang-client-0472751146/gemini-api-service:latest
+
+# 5. Deploy to Cloud Run (europe-west1)
+gcloud run deploy gemini-api-service \
+  --image gcr.io/gen-lang-client-0472751146/gemini-api-service:latest \
+  --platform managed \
+  --region europe-west1 \
+  --allow-unauthenticated \
+  --set-env-vars="GEMINI_API_KEY=${GEMINI_API_KEY},ENVIRONMENT=production" \
+  --memory 2Gi \
+  --cpu 2 \
+  --timeout 300 \
+  --min-instances 1
+```
+
+##### Solution 2: Use Cloud Build Submit (Alternative)
+
+Use the alternative Cloud Build configuration that builds from submitted source code rather than Git connections:
+
+```bash
+# Submit build manually from repository root
+gcloud builds submit \
+  --config deployment/cloud_run/cloudbuild-docker.yaml \
+  --substitutions=_GEMINI_API_KEY="${GEMINI_API_KEY}",_REGION="europe-west1"
+```
+
+##### Solution 3: Fix the Git Repository Connection
+
+If you need to use Cloud Build triggers with Git integration:
+
+```bash
+# 1. List existing connections
+gcloud builds connections list --region=europe-west1
+
+# 2. Create a new GitHub connection (if needed)
+gcloud builds connections create github my-github-connection \
+  --region=europe-west1
+
+# 3. Link your repository
+gcloud builds repositories create my-repo \
+  --remote-uri=https://github.com/your-username/your-repo.git \
+  --connection=my-github-connection \
+  --region=europe-west1
+
+# 4. Update Cloud Build trigger to use the new repository link
+gcloud builds triggers update TRIGGER_NAME \
+  --region=europe-west1 \
+  --repository=projects/gen-lang-client-0472751146/locations/europe-west1/connections/my-github-connection/repositories/my-repo
+```
+
+##### Solution 4: Use Cloud Run Direct GitHub Integration
+
+Use Cloud Run's built-in source deployment (bypasses Cloud Build triggers):
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/run)
+2. Click "Create Service" or select existing service
+3. Choose "Continuously deploy new revisions from a source repository"
+4. Click "Set up with Cloud Build"
+5. Select "GitHub" as the repository provider
+6. Authorize Cloud Build to access your GitHub account
+7. Select your repository and branch
+8. Configure build settings (Dockerfile path: `dockerfile`)
+9. Click "Save" and then "Create"
+
+### Environment Variable Configuration
+
+QEARIS uses `src/config.py` with Pydantic Settings to load environment variables. The `GEMINI_API_KEY` is read directly from the environment:
+
+```python
+# In src/config.py
+class Settings(BaseSettings):
+    GEMINI_API_KEY: str  # Required - loaded from environment
+    GEMINI_PROJECT_ID: str = "gen-lang-client-0472751146"
+    GEMINI_MODEL: str = "gemini-1.5-pro"
+    # ... other settings
+```
+
+**Setting environment variables in Cloud Run:**
+
+```bash
+# Single variable
+gcloud run services update SERVICE_NAME \
+  --region REGION \
+  --set-env-vars="GEMINI_API_KEY=your-key"
+
+# Multiple variables
+gcloud run services update SERVICE_NAME \
+  --region REGION \
+  --set-env-vars="GEMINI_API_KEY=your-key,ENVIRONMENT=production,LOG_LEVEL=INFO"
+
+# Using Secret Manager (recommended for production)
+gcloud run services update SERVICE_NAME \
+  --region REGION \
+  --set-secrets="GEMINI_API_KEY=gemini-api-key:latest"
+```
+
+**Important:** The `GEMINI_API_KEY` environment variable in Cloud Run maps directly to what the code expects. No additional configuration or code changes are needed.
+
 ### Debug Commands
 ```bash
 # SSH into container (if needed)
