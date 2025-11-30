@@ -136,6 +136,19 @@ jobs:
     needs: validate
     
     steps:
+      - name: Check Secret Availability
+        id: secret-check
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "has-secret=false" >> $GITHUB_OUTPUT
+            echo "[WARNING] GEMINI_API_KEY secret not available - tests will run in mock mode"
+          else
+            echo "has-secret=true" >> $GITHUB_OUTPUT
+            echo "[OK] GEMINI_API_KEY secret available"
+          fi
+      
       - name: Checkout Repository
         uses: actions/checkout@v4
       
@@ -154,14 +167,37 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          pytest tests/ \
-            -v \
-            --cov=src \
-            --cov-report=xml \
-            --cov-report=term \
-            --junit-xml=test-results.xml
+          if [ "${{ steps.secret-check.outputs.has-secret }}" == "false" ]; then
+            echo "Running tests without API key - skipping integration tests that require GEMINI_API_KEY"
+            pytest tests/ \
+              -v \
+              --cov=src \
+              --cov-report=xml \
+              --cov-report=term \
+              --junit-xml=test-results.xml \
+              -m "not integration" \
+              --ignore=tests/integration/
+          else
+            pytest tests/ \
+              -v \
+              --cov=src \
+              --cov-report=xml \
+              --cov-report=term \
+              --junit-xml=test-results.xml
+          fi
           
-          echo "[OK] All tests passed"
+          echo "[OK] Tests completed"
+      
+      - name: Add Test Summary
+        if: steps.secret-check.outputs.has-secret == 'false'
+        run: |
+          echo "# ⚠️ Tests Ran in Limited Mode" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The GEMINI_API_KEY secret was not available." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tests that require the API key were skipped." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To run full tests, configure the GEMINI_API_KEY secret in repository settings." >> $GITHUB_STEP_SUMMARY
       
       - name: Upload Test Results
         if: always()
