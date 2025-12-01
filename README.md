@@ -404,7 +404,7 @@ MIT License - see [LICENSE](LICENSE) file.
 ## Contact
 
 - **Author**: Abhishek Mittal
-- **Email**: your.email@example.com
+- **Email**: aabhimittal1093@gmail.com
 - **Competition**: Kaggle Capstone Project
 - **Submission Date**: November 2025
 
