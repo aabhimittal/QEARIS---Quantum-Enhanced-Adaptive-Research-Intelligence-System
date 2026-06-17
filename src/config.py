@@ -19,7 +19,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
     # Gemini API
-    GEMINI_API_KEY: str
+    # Default to empty so the package can be imported without a configured
+    # secret (e.g. in CI/tests where the LLM is mocked). Production deployments
+    # must still provide a real key via the environment or .env file.
+    GEMINI_API_KEY: str = ""
     GEMINI_PROJECT_ID: str = "gen-lang-client-0472751146"
     GEMINI_PROJECT_NUMBER: str = "412097861656"
     GEMINI_MODEL: str = "gemini-1.5-pro"
