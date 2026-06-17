@@ -51,7 +51,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install black==24.1.1 flake8==7.0.0 mypy==1.8.0 pylint==3.0.3
-          pip install bandit==1.7.6 safety==3.0.1 isort==5.13.2
+          pip install bandit==1.7.6 safety==3.2.0 isort==5.13.2
           pip install -r requirements.txt
       
       - name: Check Code Formatting (Black)
