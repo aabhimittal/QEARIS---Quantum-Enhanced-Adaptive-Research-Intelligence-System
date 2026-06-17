@@ -240,13 +240,24 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           REDIS_URL: redis://localhost:6379
+          PYTHONPATH: ${{ github.workspace }}
         run: |
+          set +e
           pytest tests/ \
             -v \
             -m "integration" \
             --cov=src \
             --cov-report=xml \
             --junit-xml=integration-results.xml
+          code=$?
+          set -e
+          # pytest exit code 5 means "no tests collected" - there are currently
+          # no integration-marked tests, so treat that as a non-failure.
+          if [ "$code" -eq 5 ]; then
+            echo "No integration tests collected - treating as success."
+            exit 0
+          fi
+          exit $code
       
       - name: Upload Integration Test Results
         if: always()
