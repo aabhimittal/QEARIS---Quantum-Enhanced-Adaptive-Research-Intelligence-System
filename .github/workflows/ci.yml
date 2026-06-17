@@ -132,7 +132,15 @@ jobs:
     name: Test Suite (Python ${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: quality
-    
+
+    # Use bash on every OS (incl. Windows via Git Bash) so the multi-line
+    # commands using backslash continuation parse consistently. The default
+    # shell on Windows is PowerShell, which does not understand `\` line
+    # continuations and fails to parse the pytest invocation.
+    defaults:
+      run:
+        shell: bash
+
     strategy:
       fail-fast: false
       matrix:
